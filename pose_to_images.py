@@ -6,6 +6,12 @@ import math
 from matplotlib import pyplot as plt
 from dataset.output_helper import save_batch_images
 
+# l ear, l eye, nose, r eye, r ear
+# l wrist, l elbow, l shoulder, middle, r shoulder, r elbow, r wrist
+# l hip, mid hip, r hip
+# l knee, r knee
+# l ankle, r ankle
+
 joint_to_limb_heatmap_relationship = [
     [1, 2], [1, 5], [2, 3], [3, 4], [5, 6], [6, 7], [1, 8], [8, 9], [9, 10],
     [1, 11], [11, 12], [12, 13], [1, 0], [0, 14], [14, 16], [0, 15], [15, 17],
@@ -15,8 +21,10 @@ joint_to_limb_heatmap_relationship = [
     [1,8],   [1,2],   [1,5],   [2,3],   [3,4],
     [5,6],   [6,7],   [8,9],   [9,10],  [10,11],
     [8,12],  [12,13], [13,14], [1,0],   [0,15],
-    [15,17], [0,16],  [16,18], [14,19], [19,20],
-    [14,21], [11,22], [22,23], [11,24]]
+    [15,17], [0,16],  [16,18]]
+
+# 19 and 20 are chin and top of head
+
 #for plot usage
 colors = [
     [255, 0, 0], [255, 85, 0], [255, 170, 0], [255, 255, 0], [170, 255, 0],
@@ -26,13 +34,15 @@ colors = [
     [255,0,0], [255,0,0], [255,0,0], [255,0,0]]
 
 
-def draw_pose_figure(coors,height=2000,width=2000,limb_thickness=4):
+def draw_pose_figure(coors,height=1500,width=1500,limb_thickness=4):
     canvas = np.ones([height,width,3])*255
     canvas = canvas.astype(np.uint8)
     limb_type = 0
     for joint_relation in  joint_to_limb_heatmap_relationship:
-        if(limb_type >= 23):
+        '''
+        if(limb_type >= 20):
             break
+        '''
         joint_coords = coors[joint_relation]
         for joint in joint_coords:  # Draw circles at every joint
             #print('joint',joint)
@@ -55,8 +65,8 @@ def imshow(image):
     plt.show()
 
 # cd content/output
-path_to_json = '/Users/will.i.liam/Desktop/final_project/content/output/'
-image_path = '/Users/will.i.liam/Desktop/final_project/images/'
+path_to_json = '/Users/will.i.liam/Desktop/final_project/openpose/output/'
+image_path = '/Users/will.i.liam/Desktop/final_project/phoan/images/'
 json_files = [pos_json for pos_json in os.listdir(path_to_json) if pos_json.endswith('.json')]
 json_files = sorted(json_files)
 
@@ -71,21 +81,25 @@ for json_file in json_files:
     keypoints = []
     count = 0
     index = 0
+    if len(data['people']) < 1:
+        continue
     for keypoint in data['people'][0]['pose_keypoints_2d']:
         # if count is 2, ignore (the confidence)
         if count != 2:
+            keypoints.append(keypoint)
+            '''
             if keypoint == 0:
                 keypoints.append(prev_keypoints[index])
             else:
                 keypoints.append(keypoint)
+            '''
             count += 1
             index += 1
         else:
             count = 0
 
-    # keypoints should be of len 50; 25 x and 25 y
-    np_keypoints = np.array(keypoints).reshape(-1, 2)
 
+    np_keypoints = np.array(keypoints).reshape(-1, 2)
     if first_file: # create shift-by based on first frame
         shift = np.array([1000, 1250] - np_keypoints[8])
 
@@ -94,9 +108,9 @@ for json_file in json_files:
     file_name = image_path + json_file[:-15] + ".jpg"
     prev_keypoints = keypoints
     print(file_name)
-    # imshow(draw_pose_figure(shifted))
+    imshow(draw_pose_figure(shifted))
     # in their code, real is stacked vertically on top of fake
-    cv2.imwrite(file_name, draw_pose_figure(shifted))
+    # cv2.imwrite(file_name, draw_pose_figure(shifted))
 
     # imshow(draw_pose_figure(np_keypoints))
     first_file = False
