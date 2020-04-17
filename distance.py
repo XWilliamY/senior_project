@@ -56,7 +56,7 @@ print(a_keys_and_confs[:, 1])
 print(a_keys_and_confs[:, 2])
 '''
 
-"""
+
 print("Person 1 ID")
 print(data['people'][person_1]['person_id'])
 data = json.load(open(args.input_dir + json_files[frame+1]))
@@ -65,6 +65,7 @@ b_keys_and_confs = np.array(data['people'][person_2]['pose_keypoints_2d']).resha
 print("Person 2 ID")
 print(data['people'][person_2]['person_id'])
 
+"""
 distance metric adapted from
 https://arxiv.org/pdf/1811.12607.pdf
 """

@@ -31,6 +31,15 @@ def imshow(image):
     plt.imshow(image[:,:,[2,1,0]].astype(np.uint8))
     plt.show()
 
+def label_canvas(frame_num, canvas):
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    # put it top middle
+    coord = (int(canvas.shape[0] / 2), 150)
+    cv2.putText(canvas, str(frame_num),
+                coord, font,
+                3, (0, 0, 0), thickness=5)
+    return canvas
+    
 def add_pose_to_canvas(person_id, coors, canvas, limb_thickness=4):
     limb_type = 0
     labeled = False
@@ -43,8 +52,10 @@ def add_pose_to_canvas(person_id, coors, canvas, limb_thickness=4):
         for joint in joint_coords:  # Draw circles at every joint
             if not labeled:
                 font = cv2.FONT_HERSHEY_SIMPLEX
-                cv2.putText(canvas, str(person_id),
-                            tuple(joint[0:2].astype(int)), font, 3, (0,0,0), thickness=5)
+                print(joint[0:2])
+                cv2.putText(canvas, person_id,
+                            tuple(joint[0:2].astype(int)), font,
+                            2, (0,0,0), thickness=5)
                 labeled = True
             cv2.circle(canvas, tuple(joint[0:2].astype(
                         int)), 4, (0,0,0), thickness=-1)
@@ -73,20 +84,69 @@ parser.add_argument("--input_dir",
                     type=str)
 parser.add_argument("--output_dir",
                     help="Path to output directory containing images",
-                    default='/Users/will.i.liam/Desktop/final_project/phoan/images/',
+                    default='/Users/will.i.liam/Desktop/final_project/phoan/images_normed_shifted/',
                     type=str)
 
 args = parser.parse_args()
 
+def check_dir(output_dir):
+    # check if output_dir exists
+    if os.path.exists(output_dir) and os.path.isdir(output_dir):
+        # check if there are files in the directory already
+        if os.listdir(output_dir):
+            # delete files
+            import shutil
+            try:
+                shutil.rmtree(output_dir)
+            except OSError as e:
+                print("Error: %s : %s" % (output_dir, e.strerror))
+            os.mkdir(output_dir)
+    else:
+        os.mkdir(output_dir)
+
+def normalize_in_frame(frame):
+    """
+    given openpose outputs, normalize coordinates for each keypoint, scaling by:
+    shifting coordinates by neck coordinate and dividing all coordinates by trunk length
+    trunk length calculated by distance between neck and mid-hip
+
+    an estimated attempt to make each person's pose estimations proportional across frames
+
+
+    expects frame in the order of openpose outputs
+    [21, 2] where 2 corresponds to x- y- coordinates
+    
+    reduces the pixel coordinate size of each coordinate
+    """
+    trunk_length = np.sqrt(np.sum( (frame[8] - frame[1]) ** 2))
+    if trunk_length > 0:
+        return frame / trunk_length
+    else:
+        return frame
+
+def normalize_and_shift(frame):
+    neck = frame[1]
+    subtracted = frame - neck
+    return normalize_in_frame(subtracted)
+
+def adjust_to_canvas(poses):
+    poses = poses * 125
+    return poses, np.ones([np.int(poses[8][1] * 2),
+                    np.int(poses[8][0] * 2), 3]) * 255
+
+check_dir(args.output_dir)
+
 json_files = [pos_json for pos_json in os.listdir(args.input_dir) if pos_json.endswith('.json')]
 json_files = sorted(json_files)
 
-first_file = True
 shift = np.array([0, 0])
 
+frame = 0
 for json_file in json_files:
     data = json.load(open(args.input_dir + json_file))
-
+    # delete this when no longer needed
+    if frame == 1801:
+        break
     # shift everything else
     '''
     keypoints = []
@@ -96,7 +156,6 @@ for json_file in json_files:
         # keypoints = [0] * 42
         continue
     else:
-        print(len(data['people']))
         for index, person in enumerate(data['people']):
             keypoints = []
             count = 0
@@ -108,14 +167,21 @@ for json_file in json_files:
                     count = 0
             # pass person['person_id'] and keypoints to canvas
             np_keypoints = np.array(keypoints).reshape(-1, 2)
+
+            normalized = normalize_and_shift(np_keypoints)
+
+            # scale it back to be displayed
+            np_keypoints = normalized * 125 + 500
+            
+            person_id = str(index) + ", " + str(person['person_id'])
             if index == 0:
                 # create the canvas
-                canvas = draw_pose_figure(person['person_id'],
+                canvas = draw_pose_figure(person_id,
                                  np_keypoints)
                 index += 1
             else:
                 # add to the canvas
-                add_pose_to_canvas(person['person_id'],
+                add_pose_to_canvas(person_id,
                                    np_keypoints,
                                    canvas)
     '''
@@ -131,7 +197,7 @@ for json_file in json_files:
 
 
     np_keypoints = np.array(keypoints).reshape(-1, 2)
-    if first_file: # create shift-by based on first frame
+    if frame == 0: # create shift-by based on first frame
         shift = np.array([1000, 1250] - np_keypoints[8])
 
     shifted = np_keypoints + shift
@@ -139,10 +205,12 @@ for json_file in json_files:
     file_name = args.output_dir + json_file[-20:-15] + ".jpg"
     print(file_name)
 
+    # add frame number to canvas
+    canvas = label_canvas(frame, canvas)
     # imshow(canvas)
     cv2.imwrite(file_name, canvas)
     # imshow(draw_pose_figure(1, np_keypoints))
     # cv2.imwrite(file_name, draw_pose_figure(shifted))
 
     # imshow(draw_pose_figure(np_keypoints))
-    first_file = False
+    frame += 1

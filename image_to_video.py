@@ -16,11 +16,11 @@ parser.add_argument("--output_dir",
 
 parser.add_argument("--output_filename",
                     help="output filename",
-                    default="project.mp4",
+                    default="normalized_shifted.mp4",
                     type=str)
 
 img_array = []
-filenames = sorted(glob.glob('/Users/will.i.liam/Desktop/final_project/phoan/images/*.jpg'))
+filenames = sorted(glob.glob('/Users/will.i.liam/Desktop/final_project/phoan/images_normed_shifted/*.jpg'))
 
 count = 0
 for filename in filenames:
@@ -32,8 +32,10 @@ for filename in filenames:
     img_array.append(img)
     count += 1
 
-fourcc_format = cv2.VideoWriter_fourcc(*'MP4V')
-out = cv2.VideoWriter('project.mp4', fourcc_format, 30, size)
+args = parser.parse_args()
+
+fourcc_format = cv2.VideoWriter_fourcc(*'mp4v')
+out = cv2.VideoWriter(args.output_filename, fourcc_format, 30, size)
  
 for i in range(len(img_array)):
     out.write(img_array[i])
