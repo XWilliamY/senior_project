@@ -80,11 +80,11 @@ def draw_pose_figure(person_id, coors, height=1500, width=1500, limb_thickness=4
 
 parser.add_argument("--input_dir",
                     help="Path to directory containing json keypoints",
-                    default='/Users/will.i.liam/Desktop/final_project/openpose/output/',
+                    default='/Users/will.i.liam/Desktop/final_project/jardy/outputVEE5qqDPVGY/',
                     type=str)
 parser.add_argument("--output_dir",
                     help="Path to output directory containing images",
-                    default='/Users/will.i.liam/Desktop/final_project/phoan/images_normed_shifted/',
+                    default='/Users/will.i.liam/Desktop/final_project/jardy/images_normed/',
                     type=str)
 
 args = parser.parse_args()
@@ -145,7 +145,7 @@ frame = 0
 for json_file in json_files:
     data = json.load(open(args.input_dir + json_file))
     # delete this when no longer needed
-    if frame == 1801:
+    if frame == 1800:
         break
     # shift everything else
     '''
@@ -168,10 +168,18 @@ for json_file in json_files:
             # pass person['person_id'] and keypoints to canvas
             np_keypoints = np.array(keypoints).reshape(-1, 2)
 
-            normalized = normalize_and_shift(np_keypoints)
 
-            # scale it back to be displayed
-            np_keypoints = normalized * 125 + 500
+            """
+            normalized = normalize_in_frame(np_keypoints)
+            neck = np_keypoints[0]
+            np_keypoints = normalized * 125
+            new_neck = np_keypoints[0]
+            diff = neck - new_neck
+            np_keypoints = np_keypoints + diff
+            """
+
+            # normalized = normalize_and_shift(np_keypoints)
+            # np_keypoints = normalized * 125 + 500
             
             person_id = str(index) + ", " + str(person['person_id'])
             if index == 0:

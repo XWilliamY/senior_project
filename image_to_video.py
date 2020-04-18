@@ -6,7 +6,7 @@ import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument("--input_dir",
                     help="Path to images",
-                    default="/Users/will.i.liam/Desktop/final_project/phoan/images/",
+                    default="/Users/will.i.liam/Desktop/final_project/jardy/images_normed/",
                     type=str)
 
 parser.add_argument("--output_dir",
@@ -16,11 +16,12 @@ parser.add_argument("--output_dir",
 
 parser.add_argument("--output_filename",
                     help="output filename",
-                    default="normalized_shifted.mp4",
+                    default="jardy_normalized_shift_by_orig_neck.mp4",
                     type=str)
+args = parser.parse_args()
 
 img_array = []
-filenames = sorted(glob.glob('/Users/will.i.liam/Desktop/final_project/phoan/images_normed_shifted/*.jpg'))
+filenames = sorted(glob.glob(args.input_dir + '*.jpg'))
 
 count = 0
 for filename in filenames:
@@ -32,7 +33,7 @@ for filename in filenames:
     img_array.append(img)
     count += 1
 
-args = parser.parse_args()
+
 
 fourcc_format = cv2.VideoWriter_fourcc(*'mp4v')
 out = cv2.VideoWriter(args.output_filename, fourcc_format, 30, size)
