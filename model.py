@@ -15,10 +15,10 @@ import torch.nn.init as init
 from torch.autograd import Variable
 
 
-class AudioToKeypointRNN(nn.Module):
+class AudioToJoints(nn.Module):
 
     def __init__(self, options):
-        super(AudioToKeypointRNN, self).__init__()
+        super(AudioToJoints, self).__init__()
 
         # Instantiating the model
         self.init = None
@@ -28,8 +28,7 @@ class AudioToKeypointRNN(nn.Module):
         # Declare the model
         self.lstm = nn.LSTM(options['input_dim'], hidden_dim, 1)
         self.dropout = nn.Dropout(options['dropout'])
-        self.fc = nn.Linear(hidden_dim, options['output_dim'])
-        self.audioType = options['type']
+        self.fc = nn.Linear(hidden_dim, 18) # for 18 joints
 
         self.initialize()
 
@@ -55,3 +54,8 @@ class AudioToKeypointRNN(nn.Module):
         dped_output = self.dropout(output)
         predictions = self.fc(dped_output)
         return predictions
+
+    def preprocess(self, input):
+        # Pre-processing step
+        # Raw audio -> MFCCs -> tensor of shape (seq_len, batch, input_size)
+        return processed_input
