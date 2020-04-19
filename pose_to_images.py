@@ -6,6 +6,7 @@ import math
 from matplotlib import pyplot as plt
 import argparse
 import sys
+from data_utils.check_dirs import check_input_dir, check_output_dir
 
 """
 draw_pose_figure adapted from:
@@ -77,36 +78,6 @@ def draw_pose_figure(person_id, coors, height=1500, width=1500, limb_thickness=4
     canvas = canvas.astype(np.uint8)
     limb_type = 0
     return add_pose_to_canvas(person_id, coors, canvas, limb_thickness)
-
-
-def check_input_dir(input_dir):
-    if not (os.path.exists(input_dir) and os.path.isdir(input_dir)):
-        print("Invalid input directory, exiting")
-        sys.exit(1)
-
-    # otherwise
-    if input_dir[-1] != '/':
-        input_dir += '/'
-    return input_dir
-
-def check_output_dir(output_dir):
-    # check if output_dir exists
-    if os.path.exists(output_dir) and os.path.isdir(output_dir):
-        # remove files if directory exists and has files
-        if os.listdir(output_dir):
-            import shutil
-            try:
-                shutil.rmtree(output_dir)
-            except OSError as e:
-                print("Error: %s : %s" % (output_dir, e.strerror))
-            os.mkdir(output_dir) # recreate directory since shutil.rmtree removes dir as well
-    else: # create directory if it doesn't exist or is not a directory
-        os.mkdir(output_dir)
-
-    # after directory has been confirmed or created, make sure output_dir has ending slash
-    if output_dir[-1] != '/':
-        output_dir += '/'
-    return output_dir
 
 def normalize_in_frame(frame):
     """
@@ -212,7 +183,7 @@ if __name__ == '__main__':
                     type=str)
     parser.add_argument("--output_dir",
                         help="Path to output directory containing images",
-                        default='/Users/will.i.liam/Desktop/final_project/jardy/images_normed/',
+                        default='/Users/will.i.liam/Desktop/final_project/jardy/images/',
                         type=str)
     
     args = parser.parse_args()
