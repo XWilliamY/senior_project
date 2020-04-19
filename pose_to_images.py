@@ -5,13 +5,14 @@ import numpy as np
 import math
 from matplotlib import pyplot as plt
 import argparse
+import sys
 
 """
 draw_pose_figure adapted from:
 https://github.com/xrenaa/Music-Dance-Video-Synthesis/blob/master/dataset/output_helper.py
 """
 
-parser = argparse.ArgumentParser()
+
 
 # 19 and 20 are chin and top of head
 joint_to_limb_heatmap_relationship = [
@@ -78,31 +79,34 @@ def draw_pose_figure(person_id, coors, height=1500, width=1500, limb_thickness=4
     return add_pose_to_canvas(person_id, coors, canvas, limb_thickness)
 
 
-parser.add_argument("--input_dir",
-                    help="Path to directory containing json keypoints",
-                    default='/Users/will.i.liam/Desktop/final_project/jardy/outputVEE5qqDPVGY/',
-                    type=str)
-parser.add_argument("--output_dir",
-                    help="Path to output directory containing images",
-                    default='/Users/will.i.liam/Desktop/final_project/jardy/images_normed/',
-                    type=str)
+def check_input_dir(input_dir):
+    if not (os.path.exists(input_dir) and os.path.isdir(input_dir)):
+        print("Invalid input directory, exiting")
+        sys.exit(1)
 
-args = parser.parse_args()
+    # otherwise
+    if input_dir[-1] != '/':
+        input_dir += '/'
+    return input_dir
 
-def check_dir(output_dir):
+def check_output_dir(output_dir):
     # check if output_dir exists
     if os.path.exists(output_dir) and os.path.isdir(output_dir):
-        # check if there are files in the directory already
+        # remove files if directory exists and has files
         if os.listdir(output_dir):
-            # delete files
             import shutil
             try:
                 shutil.rmtree(output_dir)
             except OSError as e:
                 print("Error: %s : %s" % (output_dir, e.strerror))
-            os.mkdir(output_dir)
-    else:
+            os.mkdir(output_dir) # recreate directory since shutil.rmtree removes dir as well
+    else: # create directory if it doesn't exist or is not a directory
         os.mkdir(output_dir)
+
+    # after directory has been confirmed or created, make sure output_dir has ending slash
+    if output_dir[-1] != '/':
+        output_dir += '/'
+    return output_dir
 
 def normalize_in_frame(frame):
     """
@@ -134,91 +138,82 @@ def adjust_to_canvas(poses):
     return poses, np.ones([np.int(poses[8][1] * 2),
                     np.int(poses[8][0] * 2), 3]) * 255
 
-check_dir(args.output_dir)
 
-json_files = [pos_json for pos_json in os.listdir(args.input_dir) if pos_json.endswith('.json')]
-json_files = sorted(json_files)
+def get_json_names(input_dir):
+    """
+    Go into input dir and obtain all json file names
+    """
+    # confirm input dir is valid and modify input dir if it doesn't end in /
+    input_dir = check_input_dir(input_dir)
+    json_file_names = [pos_json for pos_json in os.listdir(input_dir) if pos_json.endswith('.json')]
+    json_file_names = sorted(json_file_names)
+    return json_file_names
 
-shift = np.array([0, 0])
+def draw_all_poses(input_dir, output_dir):
+    """
+    Converts each json file into a corresponding image
+    """
+    json_files = get_json_names(input_dir)
+    frame = 0
+    for json_file in json_files:
+        data = json.load(open(input_dir + json_file))
 
-frame = 0
-for json_file in json_files:
-    data = json.load(open(args.input_dir + json_file))
-    # delete this when no longer needed
-    if frame == 1800:
-        break
-    # shift everything else
-    '''
-    keypoints = []
-    count = 0
-    '''
-    if len(data['people']) < 1:
-        # keypoints = [0] * 42
-        continue
-    else:
-        for index, person in enumerate(data['people']):
-            keypoints = []
-            count = 0
-            for keypoint in person['pose_keypoints_2d']:
-                if count != 2:
-                    keypoints.append(keypoint)
-                    count += 1
-                else:
-                    count = 0
-            # pass person['person_id'] and keypoints to canvas
-            np_keypoints = np.array(keypoints).reshape(-1, 2)
-
-
-            """
-            normalized = normalize_in_frame(np_keypoints)
-            neck = np_keypoints[0]
-            np_keypoints = normalized * 125
-            new_neck = np_keypoints[0]
-            diff = neck - new_neck
-            np_keypoints = np_keypoints + diff
-            """
-
-            # normalized = normalize_and_shift(np_keypoints)
-            # np_keypoints = normalized * 125 + 500
-            
-            person_id = str(index) + ", " + str(person['person_id'])
-            if index == 0:
-                # create the canvas
-                canvas = draw_pose_figure(person_id,
-                                 np_keypoints)
-                index += 1
-            else:
-                # add to the canvas
-                add_pose_to_canvas(person_id,
-                                   np_keypoints,
-                                   canvas)
-    '''
-    # this was saving only one pose per frame
-    else:
-        for keypoint in data['people'][0]['pose_keypoints_2d']:
-            # if count is 2, ignore (the confidence)
-            if count != 2:
-                keypoints.append(keypoint)
-                count += 1
-            else:
+        if len(data['people']) < 1:
+            keypoints = [0] * 42 # uncomment this to create an image regardless of whether there are poses
+            # continue
+            person_id = str(-1) + ", " + str([-1])
+            canvas = draw_pose_figure(person_id,
+                                      np.array(keypoints).reshape(-1, 2))
+        else:
+            # turn each person's keypoints into an numpy array
+            for index, person in enumerate(data['people']):
+                keypoints = []
                 count = 0
+                for keypoint in person['pose_keypoints_2d']:
+                    if count != 2:
+                        keypoints.append(keypoint)
+                        count += 1
+                    else:
+                        count = 0
+                # pass person['person_id'] and keypoints to canvas
+                np_keypoints = np.array(keypoints).reshape(-1, 2)
+            
+                person_id = str(index) + ", " + str(person['person_id'])
+                if index == 0:
+                    # create the canvas
+                    canvas = draw_pose_figure(person_id,
+                                              np_keypoints)
+                    index += 1
+                else:
+                    # add to the canvas
+                    add_pose_to_canvas(person_id,
+                                       np_keypoints,
+                                       canvas)
 
+        file_name = output_dir + json_file[-20:-15] + ".jpg"
+        print(file_name)
 
-    np_keypoints = np.array(keypoints).reshape(-1, 2)
-    if frame == 0: # create shift-by based on first frame
-        shift = np.array([1000, 1250] - np_keypoints[8])
+        canvas = label_canvas(frame, canvas)
+        # imshow(canvas)
+        cv2.imwrite(file_name, canvas)
+        frame += 1
 
-    shifted = np_keypoints + shift
-    '''
-    file_name = args.output_dir + json_file[-20:-15] + ".jpg"
-    print(file_name)
+def main(args):
+    input_dir = check_input_dir(args.input_dir)
+    output_dir = check_output_dir(args.output_dir)
 
-    # add frame number to canvas
-    canvas = label_canvas(frame, canvas)
-    # imshow(canvas)
-    cv2.imwrite(file_name, canvas)
-    # imshow(draw_pose_figure(1, np_keypoints))
-    # cv2.imwrite(file_name, draw_pose_figure(shifted))
+    draw_all_poses(input_dir, output_dir)
 
-    # imshow(draw_pose_figure(np_keypoints))
-    frame += 1
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--input_dir",
+                    help="Path to directory containing json keypoints",
+                    default='/Users/will.i.liam/Desktop/final_project/jardy/outputVEE5qqDPVGY/',
+                    type=str)
+    parser.add_argument("--output_dir",
+                        help="Path to output directory containing images",
+                        default='/Users/will.i.liam/Desktop/final_project/jardy/images_normed/',
+                        type=str)
+    
+    args = parser.parse_args()
+    main(args)
