@@ -18,7 +18,7 @@ def get_json_names(input_dir):
     json_file_names = sorted(json_file_names)
     return json_file_names
 
-def compile_all_poses(input_dir, output_dir, desired_person_at_frame):
+def compile_all_poses(input_dir, desired_person_at_frame):
     """
     Combines all json files into one massive json according to person_per_frame
     User is responsible for pre-screening data and selecting the correct person across all specified frames
@@ -53,7 +53,7 @@ def compile_all_poses(input_dir, output_dir, desired_person_at_frame):
         if add_to_json:
             # look for the correct person
             for index, person in enumerate(data['people']):
-                if person == target_person_id:
+                if person['person_id'] == target_person_id:
                     keypoints = []
                     count = 0
                     for keypoint in person['pose_keypoints_2d']:
@@ -75,8 +75,9 @@ def compile_all_poses(input_dir, output_dir, desired_person_at_frame):
 def main(args):
     input_dir = check_input_dir(args.input_dir)
     output_dir = check_output_dir(args.output_dir)
-    desired_person_at_frame = [(0, 153, 7878)]
-    compiled_poses = compile_all_poses(input_dir, output_dir, desired_person_at_frame)
+    desired_person_at_frame = [([0], 153, 7878)]
+    compiled_poses = compile_all_poses(input_dir, desired_person_at_frame)
+    print(compiled_poses.shape)
     np.save(output_dir + 'data.npy', compiled_poses)
 
 if __name__ == '__main__':
@@ -87,7 +88,7 @@ if __name__ == '__main__':
                     type=str)
     parser.add_argument("--output_dir",
                         help="Path to output directory containing images",
-                        default='/Users/will.i.liam/Desktop/final_project/jardy/compiled_json/',
+                        default='/Users/will.i.liam/Desktop/final_project/jardy/compiled_npy/',
                         type=str)
     
     args = parser.parse_args()

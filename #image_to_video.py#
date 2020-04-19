@@ -5,6 +5,7 @@ import argparse
 from data_utils.check_dirs import check_input_dir, check_output_dir, check_mp4
 
 
+
 def main(args):
     img_array = []
     input_dir = check_input_dir(args.input_dir)
