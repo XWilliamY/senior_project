@@ -43,12 +43,12 @@ def write_to_video(processed_poses):
                                                       pose))
         count += 1
     
-    output_filename = 'interpolated.mp4'
+    output_filename = '24_fps_interpolated.mp4'
     height, width, layers = interpolated_canvases[0].shape
     size = (width,height)
     
     fourcc_format = cv2.VideoWriter_fourcc(*'mp4v')
-    out = cv2.VideoWriter(output_filename, fourcc_format, 30, size)
+    out = cv2.VideoWriter(output_filename, fourcc_format, 24, size)
 
     count = 0
     print("Creating video")
