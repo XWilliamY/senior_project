@@ -48,19 +48,21 @@ def convert(audio_file):
     # that is desired to be captured according to the Nyquist-Shannon sampling theorem.
     x, sample_rate = librosa.load(audio_file, sr=None)
 
-    print(x.shape)
-    print(sample_rate)
+    total_samples = x.shape[0]
+    samples_per_second = sample_rate
+    frames_per_sec = 24
 
-    # each second we sample 44100
-    # total is around 336 seconds
-    print(x.shape[0] / sample_rate)
-    print(x.shape[0] / sample_rate / 60)
+    samples_per_frame = total_samples / (frames_per_sec * total_samples / samples_per_second)
 
-    # 40, 29001
-    # hop length = 512
-    # sr = 44100
+    print(samples_per_frame)
 
-
+    # sf.write("30fps_timestamp.wav", x[int(samples_per_frame * 153):], sample_rate)
+    sf.write("original_timestamp.wav", x[int(44100 * 6.37):], sample_rate)
+    '''
+    print(samples_per_frame * 153)
+    print(44100 * 6.37)
+    '''
+    '''
     # 14848000 / 29000 = 512 (which is also the hop-length)
     # thus, each of the 29000 frames corresponds to 512
 
@@ -69,12 +71,14 @@ def convert(audio_file):
 
     # 14848000 / 44100 = 336 something seconds
     # 14848000 / 512 = 29000 ... seconds?
+
     
     mfccs = librosa.feature.mfcc(y=x, sr=sample_rate, n_mfcc=40) 
-    print(mfccs.shape) # total length of x divided by hop_length
     # reconstructed = librosa.feature.inverse.mfcc_to_audio(mfccs)
     # sf.write("reconstructed_jardy_VEE5qqDPVGY.wav", reconstructed, sample_rate)
-    sf.write("later_timestamp.wav", x[int(44100 * 6.37):], sample_rate)
+
+    sf.write("30fps_timestamp.wav", x[int(samples_per_frame * 153):], sample_rate)
+    '''
     '''
     small_mfccs = librosa.feature.mfcc(y=x[:int(sample_rate * .1 * 5)], sr=sample_rate, n_mfcc=40)
     print(small_mfccs.shape)
@@ -84,10 +88,10 @@ def convert(audio_file):
     # 4410 / 512 is approx 9 (rounded up)
     # so each sample of 4410 corresponds to [40, 9]
     # or, 0.1 seconds of audio = [40, 9] if we sample at 4410
-    librosa.display.specshow(small_mfccs, sr=sample_rate, x_axis='time')
+    librosa.display.specshow(small_mfcc, sr=sample_rate, x_axis='time')
     plt.savefig('MFCCs.png')
     '''
-    return mfccs
+    # return mfccs
     
 
 convert('../jardy_VEE5qqDPVGY.mp3')

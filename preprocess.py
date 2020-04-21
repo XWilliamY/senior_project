@@ -17,6 +17,22 @@ def preprocess_poses(compiled_poses):
     Applies simple filtering, interpolation, and smoothing
     """
 
+    inserted = 0
+    multiple = 4
+
+    for frame_idx in range(int(compiled_poses.shape[0]/multiple) * multiple)[::multiple]:
+        print('='*80)
+        print(frame_idx)
+        insert_value = frame_idx + multiple + inserted
+        print(insert_value)
+        copy_index = insert_value - 1
+        print(copy_index)
+        compiled_poses = np.insert(compiled_poses, insert_value,
+                                   compiled_poses[copy_index], 0)
+        inserted += 1
+    print(compiled_poses.shape)
+
+    # filter, interpolate, and smooth
     for i in range(21): # evaluate per body part
         # x or y coordinate
         for j in range(2):
@@ -29,7 +45,10 @@ def preprocess_poses(compiled_poses):
             med_filtered_slice = medfilt(interpolated)
             smoothed_slice = cv2.GaussianBlur(med_filtered_slice, (7, 7), 100)
             compiled_poses[:, i, j] = smoothed_slice.reshape(orig_shape)
-        
+
+    print(compiled_poses.shape)
+    # if not 30 fps, need to duplicate some frames
+    # assuming 24 fps, then every four frames, duplicate
     return compiled_poses
 
 def write_to_video(processed_poses):
@@ -43,12 +62,12 @@ def write_to_video(processed_poses):
                                                       pose))
         count += 1
     
-    output_filename = '24_fps_interpolated.mp4'
+    output_filename = 'upsampled_then_processed.mp4'
     height, width, layers = interpolated_canvases[0].shape
     size = (width,height)
     
     fourcc_format = cv2.VideoWriter_fourcc(*'mp4v')
-    out = cv2.VideoWriter(output_filename, fourcc_format, 24, size)
+    out = cv2.VideoWriter(output_filename, fourcc_format, 30, size)
 
     count = 0
     print("Creating video")
@@ -69,7 +88,7 @@ def main(args):
     # process it
     processed = preprocess_poses(processed)
     # save file
-    np.save(output_dir + "processed_" + args.input_file, processed)
+    np.save(output_dir + "upsampled_24_to_30_then_processed" + args.input_file, processed)
     # generate video
     write_to_video(processed)
 
