@@ -36,9 +36,8 @@ class AudioToPosesDataset(Dataset):
                 X   (array): mfccs of shape [3, mfcc_frames]
                 y   (array): keypoints of shape [joints, 2]
         """
-        
-        X = self.mfccs[round(idx/30 * 44100/512) : round((idx+1)/30 * 44100/512), :]
-        y = self.poses[idx]
 
+        X = self.mfccs[idx : idx + 3, :]
+        y = self.poses[idx]
         return X, y
         

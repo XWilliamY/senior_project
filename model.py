@@ -14,7 +14,6 @@ import torch.nn as nn
 import torch.nn.init as init
 from torch.autograd import Variable
 
-
 class AudioToJoints(nn.Module):
 
     def __init__(self, options):

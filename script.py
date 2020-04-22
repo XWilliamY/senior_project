@@ -8,8 +8,8 @@ pose_file = root_dir + 'processed_compiled_data_line_0.npy'
 
 dataset = AudioToPosesDataset(mfcc_file, pose_file)
 
-params = {'batch_size':1,
-          'shuffle':True,
+params = {'batch_size':256,
+          'shuffle':False,
           'num_workers': 1}
 generator = data.DataLoader(dataset, **params)
 
