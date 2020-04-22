@@ -109,11 +109,11 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--input_dir",
                     help="Path to directory containing json keypoints",
-                    default='/Users/will.i.liam/Desktop/final_project/jardy/outputVEE5qqDPVGY/',
+                    default='/Users/will.i.liam/Desktop/final_project/VEE5qqDPVGY/outputVEE5qqDPVGY/',
                     type=str)
     parser.add_argument("--output_dir",
                         help="Path to output directory containing images",
-                        default='/Users/will.i.liam/Desktop/final_project/jardy/images/',
+                        default='/Users/will.i.liam/Desktop/final_project/VEE5qqDPVGY/images/',
                         type=str)
     
     args = parser.parse_args()

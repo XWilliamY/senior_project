@@ -7,6 +7,7 @@ from matplotlib import pyplot as plt
 import argparse
 import sys
 from data_utils.check_dirs import check_input_dir, check_output_dir
+from data_utils.read_desired_frames import read_desired_frames
 
 def get_json_names(input_dir):
     """
@@ -18,7 +19,7 @@ def get_json_names(input_dir):
     json_file_names = sorted(json_file_names)
     return json_file_names
 
-def compile_all_poses(input_dir, desired_person_at_frame):
+def compile_all_poses(input_dir, output_dir, desired_person_at_frame):
     """
     Combines all json files into one massive json according to person_per_frame
 
@@ -37,6 +38,7 @@ def compile_all_poses(input_dir, desired_person_at_frame):
     json_files = get_json_names(input_dir)
 
     # iterate through each pose, frame_begin, frame_end tuple
+    count = 0
     for target_person_id, frame_begin, frame_end in desired_person_at_frame:
         # go through the targeted ones
         for json_file in json_files[frame_begin:frame_end + 1]:
@@ -55,30 +57,33 @@ def compile_all_poses(input_dir, desired_person_at_frame):
                     # pass person['person_id'] and keypoints to canvas
                     np_keypoints = np.array(keypoints).reshape(-1, 2)
                     all_poses.append(np_keypoints)
-    return np.array(all_poses)
+        # save the file
+        # eventually we're gonna need a biggg dataset
+        np.save(output_dir + 'compiled_data_line_' + str(count) + '.npy', np.array(all_poses))
+        # reset
+        all_poses = []
+        count += 1
 
 def main(args):
     input_dir = check_input_dir(args.input_dir)
     output_dir = check_output_dir(args.output_dir)
-
-    # modify to include desired_person_at_frame file
-    desired_person_at_frame = [(0, 153, 7878)]
-    
-    compiled_poses = compile_all_poses(input_dir, desired_person_at_frame)
-
-    print(compiled_poses.shape)
-    np.save(output_dir + 'data.npy', compiled_poses)
+    desired_person_at_frame = read_desired_frames(args.targets)
+    compile_all_poses(input_dir, output_dir, desired_person_at_frame)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--input_dir",
                     help="Path to directory containing json keypoints",
-                    default='/Users/will.i.liam/Desktop/final_project/jardy/VEE5qqDPVGY/outputVEE5qqDPVGY/',
+                    default='/Users/will.i.liam/Desktop/final_project/VEE5qqDPVGY/outputVEE5qqDPVGY/',
                     type=str)
     parser.add_argument("--output_dir",
-                        help="Path to output directory containing images",
-                        default='/Users/will.i.liam/Desktop/final_project/jardy/compiled_npy/',
+                        help="Path to desired output directory to save data file to",
+                        default='/Users/will.i.liam/Desktop/final_project/VEE5qqDPVGY/data/',
                         type=str)
-    
+
+    parser.add_argument('--targets',
+                        help="Direct me to list of target per frame",
+                        default="/Users/will.i.liam/Desktop/final_project/VEE5qqDPVGY/targets.txt",
+                        type=str)
     args = parser.parse_args()
     main(args)

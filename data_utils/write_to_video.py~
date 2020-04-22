@@ -1,0 +1,26 @@
+def write_to_video(processed_poses):
+    interpolated_canvases = []
+    count = 0
+    for pose in processed_poses:
+        if count == 3000:
+            break
+        person_id = str(0) + ", " + str([0])
+        interpolated_canvases.append(draw_pose_figure(person_id,
+                                                      pose))
+        count += 1
+    
+    output_filename = 'upsampled_then_processed.mp4'
+    height, width, layers = interpolated_canvases[0].shape
+    size = (width,height)
+    
+    fourcc_format = cv2.VideoWriter_fourcc(*'mp4v')
+    out = cv2.VideoWriter(output_filename, fourcc_format, 30, size)
+
+    count = 0
+    print("Creating video")
+    for i in range(len(interpolated_canvases)):
+        if count == 3000:
+            break
+        out.write(interpolated_canvases[i])
+        count += 1
+    out.release()

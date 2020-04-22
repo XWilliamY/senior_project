@@ -10,26 +10,38 @@ from data_utils.check_dirs import check_input_dir, check_output_dir
 from data_utils.joints import joint_to_limb_heatmap_relationship, colors, imshow, label_canvas, add_pose_to_canvas, draw_pose_figure
 from scipy.signal import medfilt#2d
 
+def scale_to_30fps(compiled_poses, metadata):
+    """
+    Only handle 24, 25, or 30 fps
+    """
+    inserted = 0
+    if metadata == 25:
+        multiple = 5
+    elif metadata == 24:
+        multiple = 4
+    elif metadata == 30:
+        return compiled_poses
+    else:
+        return None
+
+    for frame_idx in range(int(compiled_poses.shape[0]/multiple) * multiple)[::multiple]:
+        insert_value = frame_idx + multiple + inserted
+        copy_index = insert_value - 1
+        compiled_poses = np.insert(compiled_poses, insert_value,
+                                   compiled_poses[copy_index], 0)
+        inserted += 1
+    return compiled_poses
+    
+
 def preprocess_poses(compiled_poses):
     """
     Takes in a pre-loaded, compiled numpy array of desired poses
 
     Applies simple filtering, interpolation, and smoothing
     """
+    metadata = 24
+    compiled_poses = scale_to_30fps(compiled_poses, metadata)
 
-    inserted = 0
-    multiple = 4
-
-    for frame_idx in range(int(compiled_poses.shape[0]/multiple) * multiple)[::multiple]:
-        print('='*80)
-        print(frame_idx)
-        insert_value = frame_idx + multiple + inserted
-        print(insert_value)
-        copy_index = insert_value - 1
-        print(copy_index)
-        compiled_poses = np.insert(compiled_poses, insert_value,
-                                   compiled_poses[copy_index], 0)
-        inserted += 1
     print(compiled_poses.shape)
 
     # filter, interpolate, and smooth
@@ -47,8 +59,6 @@ def preprocess_poses(compiled_poses):
             compiled_poses[:, i, j] = smoothed_slice.reshape(orig_shape)
 
     print(compiled_poses.shape)
-    # if not 30 fps, need to duplicate some frames
-    # assuming 24 fps, then every four frames, duplicate
     return compiled_poses
 
 def write_to_video(processed_poses):
@@ -82,32 +92,32 @@ def main(args):
     input_dir = check_input_dir(args.input_dir)
     output_dir = check_output_dir(args.output_dir)
     compiled_poses = np.load(input_dir + args.input_file)
-
-    # copy the original to a new npy
-    processed = np.copy(compiled_poses)
-    # process it
-    processed = preprocess_poses(processed)
+    processed = preprocess_poses(compiled_poses)
     # save file
-    np.save(output_dir + "upsampled_24_to_30_then_processed" + args.input_file, processed)
+    np.save(output_dir + "processed_" + args.input_file, processed)
     # generate video
-    write_to_video(processed)
+    if args.write_video:
+        write_to_video(processed)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--input_dir",
                         help="Path to directory containing relevant npy data",                        
-                        default='/Users/will.i.liam/Desktop/final_project/jardy/compiled_npy/',
+                        default='/Users/will.i.liam/Desktop/final_project/VEE5qqDPVGY/data/',
                         type=str)
 
     parser.add_argument("--input_file",
                         help="Name of specific file to preprocess",
-                        default='data.npy',
+                        default='compiled_data_line_0.npy',
                         type=str)
     
     parser.add_argument("--output_dir",
                         help="Path to output directory, default will be same as input_dir",
-                        default='/Users/will.i.liam/Desktop/final_project/jardy/compiled_npy/',
+                        default='/Users/will.i.liam/Desktop/final_project/VEE5qqDPVGY/data/',
                         type=str)
-    
+
+    parser.add_argument('--write_video',
+                        default=False,
+                        type=bool)
     args = parser.parse_args()
     main(args)
