@@ -53,8 +53,3 @@ class AudioToJoints(nn.Module):
         dped_output = self.dropout(output)
         predictions = self.fc(dped_output)
         return predictions
-
-    def preprocess(self, input):
-        # Pre-processing step
-        # Raw audio -> MFCCs -> tensor of shape (seq_len, batch, input_size)
-        return processed_input

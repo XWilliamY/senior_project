@@ -53,7 +53,6 @@ class AudoToBodyDynamics(object):
             'output_dim': output_dim,
             'trainable_init': args.trainable_init
         }
-        self.vidtype = args.vidtype
         self.device = args.device
         self.log_frequency = args.log_frequency
         self.upsample_times = args.upsample_times
@@ -275,8 +274,6 @@ def createOptions():
                         help="Dimension of the hidden representation")
     parser.add_argument("--test_model", type=str, default=None,
                         help="Location for saved model to load")
-    parser.add_argument("--vidtype", type=str, default='piano',
-                        help="Type of video whether piano or violin")
     parser.add_argument("--visualize", type=bool, default=False,
                         help="Visualize the output of the model. Use only in Test")
     parser.add_argument("--save_predictions", type=bool, default=True,
@@ -299,9 +296,6 @@ def createOptions():
                         help="Dropout Ratio For Trainining")
     parser.add_argument("--upsample_times", type=int, default=2,
                         help="number of times to upsample")
-    parser.add_argument("--numpca", type=int, default=15,
-                        help="number of pca dimensions. Use -1 if no pca - "
-                             "Train on XY coordinates")
     parser.add_argument("--log_frequency", type=int, default=10,
                         help="The frequency with which to checkpoint the model")
     parser.add_argument("--trainable_init", action='store_false',
