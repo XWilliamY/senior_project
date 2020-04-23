@@ -7,13 +7,7 @@ import soundfile as sf
 
 def convert(input_dir, output_dir, audio_file, targets=None):
     """
-    particular_second * sample_rate / hop_length = frame in mfcc
-    particular_second = video_frame / video_frame_per_sec
-    
-    relationship between audio and frames:
-    index into audio frame by doing sample_rate * video_frame / video_frame_per_sec
-    
-    particular_second = audio_frame / audio_frame_per_sec
+    time_in_seconds * sample_rate / hop_length = frame in mfcc
     """
 
     x, sample_rate = librosa.load(audio_file, sr=None)
@@ -21,14 +15,12 @@ def convert(input_dir, output_dir, audio_file, targets=None):
     total_samples = x.shape[0]
     samples_per_second = sample_rate
     frames_per_sec = 24
+    hop_length = 490
+    mfccs = librosa.feature.mfcc(y=x, sr=sample_rate, n_mfcc=40, hop_length=hop_length)
+    print(mfccs.shape)
 
-    samples_per_frame = total_samples / (frames_per_sec * total_samples / samples_per_second)
-
-    
-    mfccs = librosa.feature.mfcc(y=x, sr=sample_rate, n_mfcc=40)
-    print(audio_file.split('/')[-1][:-4])
     np.save(output_dir + audio_file.split('/')[-1][:-4] + "_all_mfccs.npy", mfccs)
-
+    
     if targets == None:
         return
 
@@ -42,15 +34,18 @@ def convert(input_dir, output_dir, audio_file, targets=None):
         adjust_begin = frame_begin / 24 * 30 # TODO: Don't hard code this
         adjust_end = frame_end / 24 * 30 # video frame
 
+        print(adjust_begin, adjust_end)
         if adjust_begin < 0:
             adjust_begin = 0 
         if adjust_end > total_samples / sample_rate * 30: # last frame
             adjust_end = total_samples / sample_rate * 30 
 
         # convert from video frames into mfcc frames 
-        initial = round(adjust_begin / 30 * sample_rate / 512) # assume 512 as hop length
-        end = (adjust_end / 30 * sample_rate / 512)
+        initial = round(adjust_begin / 30 * sample_rate / hop_length) # assume 512 as hop length
+        end = (adjust_end / 30 * sample_rate / hop_length)
+        print(initial, end)
 
+        '''
         for i in range(round(initial), round(end))[::9]:
             j = i + 9
             print(i, j)
@@ -74,6 +69,7 @@ def convert(input_dir, output_dir, audio_file, targets=None):
         np.save(output_dir + audio_file.split('/')[-1][:-4] + '_' + str(frame_begin) + "_" + str(frame_end) + '_mfccs.npy', np_sub_mfccs)
         reconstructed = librosa.feature.inverse.mfcc_to_audio(np_sub_mfccs)
         sf.write(output_dir + '_' + str(frame_begin) + "_" + str(frame_end) + '_mfccs.wav', reconstructed, sample_rate)
+    '''
 
 def main(args):
     input_dir = check_input_dir(args.input_dir)
