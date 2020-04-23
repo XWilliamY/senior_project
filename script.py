@@ -8,13 +8,16 @@ root_dir = 'data/'
 mfcc_file = root_dir + 'VEE5qqDPVGY_153_7878_mfccs.npy'
 pose_file = root_dir + 'processed_compiled_data_line_0.npy'
 
-seq_len = 1
+seq_len = 3
 dataset = AudioToPosesDataset(mfcc_file, pose_file, seq_len)
+
+print(dataset.getDims())
 
 params = {'batch_size':1,
           'shuffle':False,
           'num_workers': 1
           }
+
 generator = data.DataLoader(dataset, **params)
 
 for epoch in range(1):
