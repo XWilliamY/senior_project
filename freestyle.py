@@ -7,6 +7,8 @@ import torch
 from torch import optim
 from model import AudioToJoints
 from torch.autograd import Variable
+from torch.utils import data
+from classes import AudioToPosesDataset
 import matplotlib.pyplot as plt
 import os
 import argparse
@@ -226,15 +228,15 @@ class AudoToBodyDynamics(object):
 
         return final_pred, final_targ
 
-    def visualizePCA(self, preds, targets, pca_dim, save_path):
-        preds = self.data_iterator.getPCASeq(preds, pca_dim=pca_dim)
-        targs = self.data_iterator.getPCASeq(targets, pca_dim=pca_dim)
-        assert(len(preds) == len(targs))
-        plt.plot(preds, color='red', label='Predictions')
-        plt.plot(targs, color='green', label='Ground Truth')
-        plt.legend()
-        plt.savefig(save_path)
-        plt.close()
+    # def visualizePCA(self, preds, targets, pca_dim, save_path):
+    #     preds = self.data_iterator.getPCASeq(preds, pca_dim=pca_dim)
+    #     targs = self.data_iterator.getPCASeq(targets, pca_dim=pca_dim)
+    #     assert(len(preds) == len(targs))
+    #     plt.plot(preds, color='red', label='Predictions')
+    #     plt.plot(targs, color='green', label='Ground Truth')
+    #     plt.legend()
+    #     plt.savefig(save_path)
+    #     plt.close()
 
     def plotResults(self, logfldr, epoch_losses, batch_losses, val_losses):
         losses = [epoch_losses, batch_losses, val_losses]
@@ -296,6 +298,9 @@ def createOptions():
                         help="Dropout Ratio For Trainining")
     parser.add_argument("--upsample_times", type=int, default=2,
                         help="number of times to upsample")
+    parser.add_argument("--numpca", type=int, default=15,
+                        help="number of pca dimensions. Use -1 if no pca - "
+                             "Train on XY coordinates")
     parser.add_argument("--log_frequency", type=int, default=10,
                         help="The frequency with which to checkpoint the model")
     parser.add_argument("--trainable_init", action='store_false',
@@ -308,10 +313,32 @@ def createOptions():
 def main():
     args = createOptions()
     args.device = torch.device(args.device)
-    data_loc = args.data
-    is_test_mode = args.test_model is not None
+    # data_loc = args.data
+    # is_test_mode = args.test_model is not None
 
-    dynamics_learner = AudoToBodyDynamics(args, data_loc, is_test=is_test_mode)
+    root_dir = '/Users/will.i.liam/Desktop/final_project/VEE5qqDPVGY/data/'
+    mfcc_file = root_dir + 'VEE5qqDPVGY_153_7878_mfccs.npy'
+    pose_file = root_dir + 'processed_compiled_data_line_0.npy'
+
+    dataset = AudioToPosesDataset(mfcc_file, pose_file)
+
+    params = {'batch_size':256,
+              'shuffle':False,
+              'num_workers': 1}
+    generator = data.DataLoader(dataset, **params)
+
+
+    # for epoch in range(1):
+    #     count = 0
+    #
+    #     for mfccs, poses in generator:
+    #         print(mfccs.shape, poses.shape, count)
+    #         count += 1
+    #
+    #         # model computations
+
+
+    dynamics_learner = AudoToBodyDynamics(args, data_loc, is_test=False)
     logfldr = args.logfldr
     if not os.path.isdir(logfldr):
         os.makedirs(logfldr)
@@ -319,28 +346,28 @@ def main():
     if not is_test_mode:
         min_train, min_val = dynamics_learner.trainModel(
             args.max_epochs, logfldr, args.patience)
-    else:
-        dynamics_learner.data_iterator.reset()
-        outputs = dynamics_learner.runEpoch()
-        iter_train, iter_val, targ, pred = outputs
-        min_train, min_val = np.mean(iter_train[0]), np.mean(iter_val[0])
+    # else:
+    #     dynamics_learner.data_iterator.reset()
+    #     outputs = dynamics_learner.runEpoch()
+    #     iter_train, iter_val, targ, pred = outputs
+    #     min_train, min_val = np.mean(iter_train[0]), np.mean(iter_val[0])
+    #
+    #     # Format the visualization appropriately
+    #     targ, pred = dynamics_learner.formatVizArrays(pred, targ)
+    #
+    #     # Save the predictions
+    #     if args.save_predictions:
+    #         viz_info = (targ.tolist(), pred.tolist())
+    #         save_path = "{}/{}_data.json".format(logfldr, args.vidtype)
+    #         json.dump(viz_info, open(save_path, 'w+'))
+    #
+    #     # Create Video of Results
+    #     if args.visualize:
+    #         vid_path = "{}/{}.mp4".format(logfldr, args.vidtype)
+    #         visualizeKeypoints(args.vidtype, targ, pred, args.audio_file, vid_path)
 
-        # Format the visualization appropriately
-        targ, pred = dynamics_learner.formatVizArrays(pred, targ)
-
-        # Save the predictions
-        if args.save_predictions:
-            viz_info = (targ.tolist(), pred.tolist())
-            save_path = "{}/{}_data.json".format(logfldr, args.vidtype)
-            json.dump(viz_info, open(save_path, 'w+'))
-
-        # Create Video of Results
-        if args.visualize:
-            vid_path = "{}/{}.mp4".format(logfldr, args.vidtype)
-            visualizeKeypoints(args.vidtype, targ, pred, args.audio_file, vid_path)
-
-    best_lossess = [min_train, min_val]
-    log.info("The best validation is : {}".format(best_lossess))
+    best_losses = [min_train, min_val]
+    log.info("The best validation is : {}".format(best_losses))
 
 
 if __name__ == '__main__':
