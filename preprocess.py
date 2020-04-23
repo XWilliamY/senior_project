@@ -45,7 +45,7 @@ def preprocess_poses(compiled_poses):
     print(compiled_poses.shape)
 
     # filter, interpolate, and smooth
-    for i in range(21): # evaluate per body part
+    for i in range(19): # evaluate per body part
         # x or y coordinate
         for j in range(2):
             a_slice = compiled_poses[:, i, j]
@@ -58,7 +58,6 @@ def preprocess_poses(compiled_poses):
             smoothed_slice = cv2.GaussianBlur(med_filtered_slice, (7, 7), 100)
             compiled_poses[:, i, j] = smoothed_slice.reshape(orig_shape)
 
-    print(compiled_poses.shape)
     return compiled_poses
 
 def write_to_video(processed_poses):
@@ -95,6 +94,7 @@ def main(args):
     processed = preprocess_poses(compiled_poses)
     # save file
     np.save(output_dir + "processed_" + args.input_file, processed)
+    print(processed.shape)
     # generate video
     if args.write_video:
         write_to_video(processed)
