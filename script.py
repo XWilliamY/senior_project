@@ -11,7 +11,8 @@ pose_file = root_dir + 'processed_compiled_data_line_0.npy'
 seq_len = 4
 dataset = AudioToPosesDataset(mfcc_file, pose_file, seq_len)
 
-print(dataset.getDims())
+print(dataset.getDataDims())
+print(dataset.getDimsPerBatch())
 
 params = {'batch_size':1,
           'shuffle':False,
@@ -24,7 +25,7 @@ for epoch in range(1):
     count = 0
     
     for mfccs, poses in generator:
-        print(mfccs.shape, poses.shape, count)
+        # print(mfccs.shape, poses.shape, count)
         count += 1
 
         # model computations

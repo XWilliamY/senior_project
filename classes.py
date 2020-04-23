@@ -22,12 +22,15 @@ class AudioToPosesDataset(Dataset):
         self.mfccs = self.mfccs.T.astype('float64')
         self.poses = np.load(self.pose_file).astype('float64')
 
-    def getDims(self):
+    def getDataDims(self):
         """
         MFCC dimensions
         Pose dimensions
         """
-        
+        return self.mfccs.shape, self.poses.shape
+
+    def getDimsPerBatch(self):
+        return self.mfccs.shape[-1]*3, 38
     
     def __len__(self):
         """
@@ -46,8 +49,6 @@ class AudioToPosesDataset(Dataset):
         """
 
         mfcc_idx = self.seq_len * 3 # 3 mfcc frames per timestep
-        print(mfcc_idx)
-        
         X = self.mfccs[idx * mfcc_idx : (idx + 1) * mfcc_idx, :]
         X = X.reshape([self.seq_len, -1]) 
         y = self.poses[idx * self.seq_len : (idx+1) * self.seq_len]
