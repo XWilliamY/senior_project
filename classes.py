@@ -6,7 +6,7 @@ from torch.utils.data import Dataset, DataLoader
 class AudioToPosesDataset(Dataset):
     """ Aligns mfcc .npy file to poses .npy file """
 
-    def __init__(self, mfcc_file, pose_file):
+    def __init__(self, mfcc_file, pose_file, seq_len):
         """
         Args:
              mfcc_file (string): Path to .npy file w/ mfccs
@@ -40,4 +40,3 @@ class AudioToPosesDataset(Dataset):
         X = self.mfccs[idx : idx + 3, :]
         y = self.poses[idx]
         return X, y
-        
