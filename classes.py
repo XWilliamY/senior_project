@@ -33,7 +33,7 @@ class AudioToPosesDataset(Dataset):
         """
         Returns the number of video frames
         """
-        return len(self.poses)
+        return int( len(self.poses) / self.seq_len)
 
     def __getitem__(self, idx):
         """
@@ -43,19 +43,14 @@ class AudioToPosesDataset(Dataset):
         Returns:
                 X   (array): mfccs of shape [seq_len, mfcc_features]
                 y   (array): keypoints of shape [joints, 2]
-
-        self.seq_len = 3
-        0 * self.seq_len = 0
-        (0 + 1) * 3  * self.seq_len = 9
-
-        1 * 3 = 9
-        (1 + 1) * 3  * self.seq_len = 18
         """
 
         mfcc_idx = self.seq_len * 3 # 3 mfcc frames per timestep
+        print(mfcc_idx)
+        
         X = self.mfccs[idx * mfcc_idx : (idx + 1) * mfcc_idx, :]
         X = X.reshape([self.seq_len, -1]) 
-        y = self.poses[idx, idx+self.seq_len]
+        y = self.poses[idx * self.seq_len : (idx+1) * self.seq_len]
         y = y.reshape([self.seq_len, -1])
         return X, y
         

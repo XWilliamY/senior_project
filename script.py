@@ -8,7 +8,7 @@ root_dir = 'data/'
 mfcc_file = root_dir + 'VEE5qqDPVGY_153_7878_mfccs.npy'
 pose_file = root_dir + 'processed_compiled_data_line_0.npy'
 
-seq_len = 3
+seq_len = 4
 dataset = AudioToPosesDataset(mfcc_file, pose_file, seq_len)
 
 print(dataset.getDims())
