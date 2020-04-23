@@ -48,17 +48,15 @@ def compile_all_poses(input_dir, output_dir, desired_person_at_frame):
                 if person['person_id'][0] == target_person_id:
                     keypoints = []
                     count = 0
-                    for keypoint in person['pose_keypoints_2d']:
+                    for keypoint in person['pose_keypoints_2d'][:57]:
                         if count != 2:
                             keypoints.append(keypoint)
                             count += 1
                         else:
                             count = 0
-                    # pass person['person_id'] and keypoints to canvas
                     np_keypoints = np.array(keypoints).reshape(-1, 2)
                     all_poses.append(np_keypoints)
         # save the file
-        # eventually we're gonna need a biggg dataset
         np.save(output_dir + 'compiled_data_line_' + str(count) + '.npy', np.array(all_poses))
         # reset
         all_poses = []
