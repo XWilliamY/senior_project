@@ -60,4 +60,3 @@ class AudioToPosesDataset(Dataset):
         y = self.poses[idx * self.seq_len : (idx+1) * self.seq_len]
         y = y.reshape([self.seq_len, -1])
         return X, y
-        

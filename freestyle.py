@@ -15,7 +15,7 @@ import argparse
 import logging
 import numpy as np
 import json
-from visualize import visualizeKeypoints
+#from visualize import visualizeKeypoints
 
 '''
 This script takes an input of audio MFCC features and uses
@@ -30,19 +30,19 @@ torch.manual_seed(1234)
 np.random.seed(1234)
 
 
-class AudoToBodyDynamics(object):
+class AudioToBodyDynamics(object):
 
     def __init__(self, args, dataset, is_test=False):
-        super(AudoToBodyDynamics, self).__init__()
+        super(AudioToBodyDynamics, self).__init__()
 
         self.is_test_mode = is_test
-        self.data_iterator = dataset
+        self.generator = dataset
 
         # Refresh data configuration from checkpoint
         if self.is_test_mode:
             self.loadDataCheckpoint(args.test_model, args.upsample_times)
 
-        input_dim, output_dim = self.data_iterator.getInOutDimensions()
+        input_dim, output_dim = #self.data_iterator.getInOutDimensions()
 
         # construct the model
         model_options = {
@@ -61,92 +61,84 @@ class AudoToBodyDynamics(object):
         self.optim = optim.Adam(self.model.parameters(), lr=args.lr)
 
         # Load checkpoint model
-        if self.is_test_mode:
-            self.loadModelCheckpoint(args.test_model)
+        # if self.is_test_mode:
+        #     self.loadModelCheckpoint(args.test_model)
 
     # loss function
-    def buildLoss(self, rnn_out, target, mask):
+    def buildLoss(self, predictions, targets):
         square_diff = (rnn_out - target)**2
         out = torch.sum(square_diff, 1, keepdim=True)
-        masked_out = out * mask
-        return torch.mean(masked_out), masked_out
+        return torch.mean(out)
 
-    def saveModel(self, state_info, path):
-        torch.save(state_info, path)
+    # def saveModel(self, state_info, path):
+    #     torch.save(state_info, path)
+    #
+    # def loadModelCheckpoint(self, path):
+    #     checkpoint = torch.load(path)
+    #     self.model.load_state_dict(checkpoint['model_state_dict'])
+    #     self.optim.load_state_dict(checkpoint['optim_state_dict'])
+    #
+    # def loadDataCheckpoint(self, path, upsample_times):
+    #     checkpoint = torch.load(path)
+    #     self.data_iterator.loadStateDict(checkpoint['data_state_dict'])
+    #     self.data_iterator.processTestData(upsample_times=upsample_times)
 
-    def loadModelCheckpoint(self, path):
-        checkpoint = torch.load(path)
-        self.model.load_state_dict(checkpoint['model_state_dict'])
-        self.optim.load_state_dict(checkpoint['optim_state_dict'])
-
-    def loadDataCheckpoint(self, path, upsample_times):
-        checkpoint = torch.load(path)
-        self.data_iterator.loadStateDict(checkpoint['data_state_dict'])
-        self.data_iterator.processTestData(upsample_times=upsample_times)
-
-    def runNetwork(self, validate=False):
+    def runNetwork(self, inputs, targets, validate=False):
         def to_numpy(x):
             return x.cpu().data.numpy()
 
         # Set up inputs to the network
-        batch_info = self.data_iterator.nextBatch(is_test=validate)
-        in_batch, out_batch, mask_batch = batch_info
-        inputs = Variable(torch.FloatTensor(in_batch).to(self.device))
-        targets = Variable(torch.FloatTensor(out_batch).to(self.device))
-        masks = Variable(torch.FloatTensor(mask_batch).to(self.device))
+        # batch_info = self.data_iterator.nextBatch(is_test=validate)
+        # in_batch, out_batch, mask_batch = batch_info
+        # inputs = Variable(torch.FloatTensor(in_batch).to(self.device))
+        # targets = Variable(torch.FloatTensor(out_batch).to(self.device))
+        # masks = Variable(torch.FloatTensor(mask_batch).to(self.device))
 
         # Run the network
         predictions = self.model.forward(inputs)
 
-        # Get loss in pca coefficient space
-        loss, _ = self.buildLoss(predictions, targets, masks)
+        # Get loss in MSE of pose coordinates
+        loss = self.buildLoss(predictions, targets)
 
-        # Get loss in pixel space
-        pixel_predictions = self.data_iterator.toPixelSpace(to_numpy(predictions))
-        pixel_predictions = torch.FloatTensor(pixel_predictions).to(self.device)
+        # # Get loss in pixel space
+        # pixel_predictions = self.data_iterator.toPixelSpace(to_numpy(predictions))
+        # pixel_predictions = torch.FloatTensor(pixel_predictions).to(self.device)
+        #
+        # pixel_targets = self.data_iterator.toPixelSpace(out_batch)
+        # pixel_targets = torch.FloatTensor(pixel_targets).to(self.device)
+        # _, frame_loss = self.buildLoss(pixel_predictions, pixel_targets, masks)
+        #
+        # frame_loss = frame_loss / pixel_targets.size()[1]
+        # # Gives the average deviation of prediction from target pixel
+        # pixel_loss = torch.mean(torch.sqrt(frame_loss))
 
-        pixel_targets = self.data_iterator.toPixelSpace(out_batch)
-        pixel_targets = torch.FloatTensor(pixel_targets).to(self.device)
-        _, frame_loss = self.buildLoss(pixel_predictions, pixel_targets, masks)
-
-        frame_loss = frame_loss / pixel_targets.size()[1]
-        # Gives the average deviation of prediction from target pixel
-        pixel_loss = torch.mean(torch.sqrt(frame_loss))
-
-        return (to_numpy(predictions), to_numpy(targets)), loss, pixel_loss
+        return (to_numpy(predictions), to_numpy(targets)), loss
 
     def runEpoch(self):
-        pixel_losses, coeff_losses = [], []
-        val_pix_losses, val_coeff_losses = [], []
+        train_losses = [], []
+        val_losses = [], []
         predictions, targets = [], []
 
-        while (not self.is_test_mode and self.data_iterator.hasNext(is_test=False)):
+        for mfccs, poses in self.generator:
             self.model.train()
-            _, pca_coeff_loss, pixel_loss = self.runNetwork(validate=False)
+            _, train_loss = self.runNetwork(mfccs, poses, validate=False)
             self.optim.zero_grad()
-            pca_coeff_loss.backward()
+            train_loss.backward()
             self.optim.step()
 
-            pca_coeff_loss = pca_coeff_loss.data.tolist()
-            pixel_loss = pixel_loss.data.tolist()
-            pixel_losses.append(pixel_loss)
-            coeff_losses.append(pca_coeff_loss)
+            train_loss = train_loss.data.tolist()
+            train_losses.append(train_loss)
 
-        while(self.data_iterator.hasNext(is_test=True)):
+        for mfccs, poses in self.generator:
             self.model.eval()
-            vis_data, pca_coeff_loss, pixel_loss = self.runNetwork(validate=True)
-            pca_coeff_loss = pca_coeff_loss.data.tolist()
-            pixel_loss = pixel_loss.data.tolist()
-
-            val_pix_losses.append(pixel_loss)
-            val_coeff_losses.append(pca_coeff_loss)
+            vis_data, val_loss = self.runNetwork(validate=True)
+            val_loss = val_loss.data.tolist()
+            val_losses.append(val_loss)
 
             predictions.append(vis_data[0])
             targets.append(vis_data[1])
 
-        train_info = (pixel_losses, coeff_losses)
-        val_info = (val_pix_losses, val_coeff_losses)
-        return train_info, val_info, predictions, targets
+        return train_losses, val_losses
 
     def trainModel(self, max_epochs, logfldr, patience):
         log.debug("Training model")
@@ -156,15 +148,13 @@ class AudoToBodyDynamics(object):
         i, best_loss, iters_without_improvement = 0, float('inf'), 0
         best_train_loss, best_val_loss = float('inf'), float('inf')
 
-        while(i < max_epochs):
-            i += 1
-            self.data_iterator.reset()
-            iter_train, iter_val, predictions, targets = self.runEpoch()
-            iter_mean = np.mean(iter_train[0]), np.mean(iter_train[1])
+        for i in range(max_epochs):
+            iter_loss = self.runEpoch()
+            iter_mean = np.mean(iter_loss[0]), np.mean(iter_loss[1])
             iter_val_mean = np.mean(iter_val[0]), np.mean(iter_val[1])
 
             epoch_losses.append(iter_mean)
-            batch_losses.extend(iter_train)
+            batch_losses.extend(iter_loss)
             val_losses.append(iter_val_mean)
 
             log.info("Epoch {} / {}".format(i, max_epochs))
@@ -183,50 +173,50 @@ class AudoToBodyDynamics(object):
                     log.info("Stopping Early because no improvment in {}".format(
                         iters_without_improvement))
                     break
-            if improved or (i % self.log_frequency) == 0:
-                # Save the model information
-                path = os.path.join(logfldr, "Epoch_{}".format(i))
-                os.makedirs(path)
-                path = os.path.join(path, "model_db.pth")
-                state_info = {
-                    'epoch': i,
-                    'epoch_losses': epoch_losses,
-                    'batch_losses': batch_losses,
-                    'validation_losses': val_losses,
-                    'model_state_dict': self.model.state_dict(),
-                    'optim_state_dict': self.optim.state_dict(),
-                    'data_state_dict': self.data_iterator.stateDict()
-                }
-                self.saveModel(state_info, path)
-                if improved:
-                    path = os.path.join(logfldr, "best_model_db.pth")
-                    self.saveModel(state_info, path)
-
-                # Visualize the PCA Coefficients
-                num_vis = min(3, targets[0].shape[-1])
-                for j in range(num_vis):
-                    save_path = os.path.join(
-                        logfldr, "Epoch_{}/pca_{}.png".format(i, j))
-                    self.visualizePCA(predictions[0], targets[0], j, save_path)
+            # if improved or (i % self.log_frequency) == 0:
+            #     # Save the model information
+            #     path = os.path.join(logfldr, "Epoch_{}".format(i))
+            #     os.makedirs(path)
+            #     path = os.path.join(path, "model_db.pth")
+            #     state_info = {
+            #         'epoch': i,
+            #         'epoch_losses': epoch_losses,
+            #         'batch_losses': batch_losses,
+            #         'validation_losses': val_losses,
+            #         'model_state_dict': self.model.state_dict(),
+            #         'optim_state_dict': self.optim.state_dict(),
+            #         'data_state_dict': self.data_iterator.stateDict()
+            #     }
+            #     self.saveModel(state_info, path)
+            #     if improved:
+            #         path = os.path.join(logfldr, "best_model_db.pth")
+            #         self.saveModel(state_info, path)
+            #
+            #     # Visualize the PCA Coefficients
+            #     num_vis = min(3, targets[0].shape[-1])
+            #     for j in range(num_vis):
+            #         save_path = os.path.join(
+            #             logfldr, "Epoch_{}/pca_{}.png".format(i, j))
+            #         self.visualizePCA(predictions[0], targets[0], j, save_path)
 
         self.plotResults(logfldr, epoch_losses, batch_losses, val_losses)
         return best_train_loss, best_val_loss
 
-    def formatVizArrays(self, predictions, targets):
-        final_pred, final_targ = [], []
-        for ind, pred in enumerate(predictions):
-            pred = self.data_iterator.toPixelSpace(pred)
-            targ = self.data_iterator.toPixelSpace(targets[ind])
-            pred = self.data_iterator.reconstructKeypsOrder(pred)
-            targ = self.data_iterator.reconstructKeypsOrder(targ)
-            final_pred.append(pred)
-            final_targ.append(targ)
-
-        final_pred, final_targ = np.vstack(final_pred), np.vstack(final_targ)
-        final_pred = final_pred[0::(2**self.upsample_times)]
-        final_targ = final_targ[0::(2**self.upsample_times)]
-
-        return final_pred, final_targ
+    # def formatVizArrays(self, predictions, targets):
+    #     final_pred, final_targ = [], []
+    #     for ind, pred in enumerate(predictions):
+    #         pred = self.data_iterator.toPixelSpace(pred)
+    #         targ = self.data_iterator.toPixelSpace(targets[ind])
+    #         pred = self.data_iterator.reconstructKeypsOrder(pred)
+    #         targ = self.data_iterator.reconstructKeypsOrder(targ)
+    #         final_pred.append(pred)
+    #         final_targ.append(targ)
+    #
+    #     final_pred, final_targ = np.vstack(final_pred), np.vstack(final_targ)
+    #     final_pred = final_pred[0::(2**self.upsample_times)]
+    #     final_targ = final_targ[0::(2**self.upsample_times)]
+    #
+    #     return final_pred, final_targ
 
     # def visualizePCA(self, preds, targets, pca_dim, save_path):
     #     preds = self.data_iterator.getPCASeq(preds, pca_dim=pca_dim)
@@ -260,11 +250,11 @@ def createOptions():
     parser = argparse.ArgumentParser(
         description="Pytorch: Audio To Body Dynamics Model"
     )
-    parser.add_argument("--data", type=str, default="piano_data.json",
-                        help="Path to data file")
-    parser.add_argument("--audio_file", type=str, default=None,
-                        help="Only in for Test. Location audio file for"
-                             " generating test video")
+    # parser.add_argument("--data", type=str, default="piano_data.json",
+    #                     help="Path to data file")
+    # parser.add_argument("--audio_file", type=str, default=None,
+    #                     help="Only in for Test. Location audio file for"
+    #                          " generating test video")
     parser.add_argument("--logfldr", type=str, default=None,
                         help="Path to folder to save training information",
                         required=True)
@@ -327,24 +317,16 @@ def main():
               'shuffle':False,
               'num_workers': 1
               }
-    generator = data.DataIterator(dataset, **params)
+    generator = data.DataLoader(dataset, **params)
 
+    # Create model
+    dynamics_learner = AudioToBodyDynamics(args, generator)
 
-    # for epoch in range(1):
-    #     count = 0
-    #
-    #     for mfccs, poses in generator:
-    #         print(mfccs.shape, poses.shape, count)
-    #         count += 1
-    #
-    #         # model computations
+    # logfldr = args.logfldr
+    # if not os.path.isdir(logfldr):
+    #     os.makedirs(logfldr)
 
-
-    dynamics_learner = AudoToBodyDynamics(args, generator, is_test=False)
-    logfldr = args.logfldr
-    if not os.path.isdir(logfldr):
-        os.makedirs(logfldr)
-
+    # Train model
     if not is_test_mode:
         min_train, min_val = dynamics_learner.trainModel(
             args.max_epochs, logfldr, args.patience)
