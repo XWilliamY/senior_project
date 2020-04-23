@@ -30,10 +30,10 @@ torch.manual_seed(1234)
 np.random.seed(1234)
 
 
-class AudoToBodyDynamics(object):
+class AudioToBodyDynamics(object):
 
     def __init__(self, args, dataset, is_test=False):
-        super(AudoToBodyDynamics, self).__init__()
+        super(AudioToBodyDynamics, self).__init__()
 
         self.is_test_mode = is_test
         self.generator = dataset
@@ -65,11 +65,10 @@ class AudoToBodyDynamics(object):
         #     self.loadModelCheckpoint(args.test_model)
 
     # loss function
-    def buildLoss(self, rnn_out, target, mask):
+    def buildLoss(self, predictions, targets):
         square_diff = (rnn_out - target)**2
         out = torch.sum(square_diff, 1, keepdim=True)
-        masked_out = out * mask
-        return torch.mean(masked_out), masked_out
+        return torch.mean(out)
 
     # def saveModel(self, state_info, path):
     #     torch.save(state_info, path)
@@ -98,8 +97,8 @@ class AudoToBodyDynamics(object):
         # Run the network
         predictions = self.model.forward(inputs)
 
-        # Get loss in pca coefficient space
-        loss, _ = self.buildLoss(predictions, targets, masks)
+        # Get loss in MSE of pose coordinates
+        loss = self.buildLoss(predictions, targets)
 
         # # Get loss in pixel space
         # pixel_predictions = self.data_iterator.toPixelSpace(to_numpy(predictions))
@@ -116,35 +115,30 @@ class AudoToBodyDynamics(object):
         return (to_numpy(predictions), to_numpy(targets)), loss
 
     def runEpoch(self):
-        coeff_losses = [], []
-        val_coeff_losses = [], []
+        train_losses = [], []
+        val_losses = [], []
         predictions, targets = [], []
 
         for mfccs, poses in self.generator:
             self.model.train()
-            _, loss = self.runNetwork(mfccs, poses, validate=False)
+            _, train_loss = self.runNetwork(mfccs, poses, validate=False)
             self.optim.zero_grad()
-            pca_coeff_loss.backward()
+            train_loss.backward()
             self.optim.step()
 
-            loss = loss.data.tolist()
-            coeff_losses.append(loss)
+            train_loss = train_loss.data.tolist()
+            train_losses.append(train_loss)
 
-        # while(self.data_iterator.hasNext(is_test=True)):
-        #     self.model.eval()
-        #     vis_data, pca_coeff_loss, pixel_loss = self.runNetwork(validate=True)
-        #     pca_coeff_loss = pca_coeff_loss.data.tolist()
-        #     pixel_loss = pixel_loss.data.tolist()
-        #
-        #     val_pix_losses.append(pixel_loss)
-        #     val_coeff_losses.append(pca_coeff_loss)
-        #
-        #     predictions.append(vis_data[0])
-        #     targets.append(vis_data[1])
+        for mfccs, poses in self.generator:
+            self.model.eval()
+            vis_data, val_loss = self.runNetwork(validate=True)
+            val_loss = val_loss.data.tolist()
+            val_losses.append(val_loss)
 
-        train_info = (pixel_losses, coeff_losses)
-        val_info = (val_pix_losses, val_coeff_losses)
-        return train_info, val_info, predictions, targets
+            predictions.append(vis_data[0])
+            targets.append(vis_data[1])
+
+        return train_losses, val_losses
 
     def trainModel(self, max_epochs, logfldr, patience):
         log.debug("Training model")
@@ -154,15 +148,13 @@ class AudoToBodyDynamics(object):
         i, best_loss, iters_without_improvement = 0, float('inf'), 0
         best_train_loss, best_val_loss = float('inf'), float('inf')
 
-        while(i < max_epochs):
-            i += 1
-            self.data_iterator.reset()
-            iter_train, iter_val, predictions, targets = self.runEpoch()
-            iter_mean = np.mean(iter_train[0]), np.mean(iter_train[1])
+        for i in range(max_epochs):
+            iter_loss = self.runEpoch()
+            iter_mean = np.mean(iter_loss[0]), np.mean(iter_loss[1])
             iter_val_mean = np.mean(iter_val[0]), np.mean(iter_val[1])
 
             epoch_losses.append(iter_mean)
-            batch_losses.extend(iter_train)
+            batch_losses.extend(iter_loss)
             val_losses.append(iter_val_mean)
 
             log.info("Epoch {} / {}".format(i, max_epochs))
@@ -327,39 +319,17 @@ def main():
               }
     generator = data.DataLoader(dataset, **params)
 
-
-    # for epoch in range(1):
-    #     count = 0
-    #
-    #     for mfccs, poses in generator:
-    #         print(mfccs.shape, poses.shape, count)
-    #         count += 1
-    #
-    #         # model computations
-
-
-    #dynamics_learner = AudoToBodyDynamics(args, generator)
-    model_options = {
-        'device': args.device,
-        'dropout': args.dp,
-        'batch_size': args.batch_size,
-        'hidden_dim': args.hidden_size,
-        'input_dim': input_dim,
-        'output_dim': output_dim,
-        'trainable_init': args.trainable_init
-    }
-    dynamics_learner = AudioToJoints(model_options).cuda(args.device)
-
-    for epoch in range(args.max_epochs):
-        for mfccs, poses in generator:
+    # Create model
+    dynamics_learner = AudioToBodyDynamics(args, generator)
 
     # logfldr = args.logfldr
     # if not os.path.isdir(logfldr):
     #     os.makedirs(logfldr)
-    #
-    # if not is_test_mode:
-    #     min_train, min_val = dynamics_learner.trainModel(
-    #         args.max_epochs, logfldr, args.patience)
+
+    # Train model
+    if not is_test_mode:
+        min_train, min_val = dynamics_learner.trainModel(
+            args.max_epochs, logfldr, args.patience)
     # else:
     #     dynamics_learner.data_iterator.reset()
     #     outputs = dynamics_learner.runEpoch()
