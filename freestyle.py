@@ -15,7 +15,6 @@ import argparse
 import logging
 import numpy as np
 import json
-from data_utils.data import DataIterator
 from visualize import visualizeKeypoints
 
 '''
@@ -33,11 +32,11 @@ np.random.seed(1234)
 
 class AudoToBodyDynamics(object):
 
-    def __init__(self, args, data_locs, is_test=False):
+    def __init__(self, args, dataset, is_test=False):
         super(AudoToBodyDynamics, self).__init__()
 
         self.is_test_mode = is_test
-        self.data_iterator = DataIterator(args, data_locs, test_mode=is_test)
+        self.data_iterator = dataset
 
         # Refresh data configuration from checkpoint
         if self.is_test_mode:
@@ -65,6 +64,7 @@ class AudoToBodyDynamics(object):
         if self.is_test_mode:
             self.loadModelCheckpoint(args.test_model)
 
+    # loss function
     def buildLoss(self, rnn_out, target, mask):
         square_diff = (rnn_out - target)**2
         out = torch.sum(square_diff, 1, keepdim=True)
@@ -316,16 +316,18 @@ def main():
     # data_loc = args.data
     # is_test_mode = args.test_model is not None
 
-    root_dir = '/Users/will.i.liam/Desktop/final_project/VEE5qqDPVGY/data/'
+    root_dir = 'data/'
     mfcc_file = root_dir + 'VEE5qqDPVGY_153_7878_mfccs.npy'
     pose_file = root_dir + 'processed_compiled_data_line_0.npy'
 
-    dataset = AudioToPosesDataset(mfcc_file, pose_file)
+    seq_len = 1
+    dataset = AudioToPosesDataset(mfcc_file, pose_file, seq_len)
 
-    params = {'batch_size':256,
+    params = {'batch_size':1,
               'shuffle':False,
-              'num_workers': 1}
-    generator = data.DataLoader(dataset, **params)
+              'num_workers': 1
+              }
+    generator = data.DataIterator(dataset, **params)
 
 
     # for epoch in range(1):
@@ -338,7 +340,7 @@ def main():
     #         # model computations
 
 
-    dynamics_learner = AudoToBodyDynamics(args, data_loc, is_test=False)
+    dynamics_learner = AudoToBodyDynamics(args, generator, is_test=False)
     logfldr = args.logfldr
     if not os.path.isdir(logfldr):
         os.makedirs(logfldr)
