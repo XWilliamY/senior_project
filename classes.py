@@ -29,8 +29,14 @@ class AudioToPosesDataset(Dataset):
         """
         return self.mfccs.shape, self.poses.shape
 
+    def getSingleInputFeatureDims(self):
+        return self.mfccs.shape[-1] * 3
+
+    def getSingleOutputFeatureDims(self):
+        return 38
+    
     def getDimsPerBatch(self):
-        return self.mfccs.shape[-1]*3, 38
+        return self.getSingleInputFeatureDims(), self.getSingleOutputFeatureDims()
     
     def __len__(self):
         """
