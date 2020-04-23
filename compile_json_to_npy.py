@@ -40,6 +40,7 @@ def compile_all_poses(input_dir, output_dir, desired_person_at_frame):
     # iterate through each pose, frame_begin, frame_end tuple
     count = 0
     for target_person_id, frame_begin, frame_end in desired_person_at_frame:
+        print(frame_begin, frame_end)
         # go through the targeted ones
         for json_file in json_files[frame_begin:frame_end + 1]:
             data = json.load(open(input_dir + json_file))
@@ -58,14 +59,20 @@ def compile_all_poses(input_dir, output_dir, desired_person_at_frame):
                     all_poses.append(np_keypoints)
         # save the file
         np.save(output_dir + 'compiled_data_line_' + str(count) + '.npy', np.array(all_poses))
+        print(np.array(all_poses).shape)
         # reset
+
         all_poses = []
         count += 1
 
 def main(args):
     input_dir = check_input_dir(args.input_dir)
     output_dir = check_output_dir(args.output_dir)
-    desired_person_at_frame = read_desired_frames(args.targets)
+    frame_rate = 24
+    target_frame_rate = 24
+    desired_person_at_frame = read_desired_frames(args.targets, frame_rate, target_frame_rate)
+    print('='*80)
+    print(desired_person_at_frame)
     compile_all_poses(input_dir, output_dir, desired_person_at_frame)
 
 if __name__ == '__main__':
