@@ -45,10 +45,6 @@ class AudioToBodyDynamics(object):
         self.is_test_mode = is_test
         self.generator = generator
 
-        # Refresh data configuration from checkpoint
-        if self.is_test_mode:
-            self.loadDataCheckpoint(args.test_model, args.upsample_times)
-
         input_dim, output_dim = self.generator.dataset.getDimsPerBatch()
 
         # construct the model
@@ -74,23 +70,20 @@ class AudioToBodyDynamics(object):
 
     # loss function
     def buildLoss(self, predictions, targets):
-        targets = targets.reshape(-1, 38)
+        print("in build loss")
+        print(predictions.shape)
+        print(targets.shape)
         square_diff = (predictions - targets)**2
         out = torch.sum(square_diff, 1, keepdim=True)
         return torch.mean(out)
 
-    # def saveModel(self, state_info, path):
-    #     torch.save(state_info, path)
-    #
-    # def loadModelCheckpoint(self, path):
-    #     checkpoint = torch.load(path)
-    #     self.model.load_state_dict(checkpoint['model_state_dict'])
-    #     self.optim.load_state_dict(checkpoint['optim_state_dict'])
-    #
-    # def loadDataCheckpoint(self, path, upsample_times):
-    #     checkpoint = torch.load(path)
-    #     self.data_iterator.loadStateDict(checkpoint['data_state_dict'])
-    #     self.data_iterator.processTestData(upsample_times=upsample_times)
+    def saveModel(self, state_info, path):
+        torch.save(state_info, path)
+
+    def loadModelCheckpoint(self, path):
+        checkpoint = torch.load(path)
+        self.model.load_state_dict(checkpoint['model_state_dict'])
+        self.optim.load_state_dict(checkpoint['optim_state_dict'])
 
     def runNetwork(self, inputs, targets, validate=False):
         """
@@ -132,18 +125,20 @@ class AudioToBodyDynamics(object):
 
                 train_loss = train_loss.data.tolist()
                 train_losses.append(train_loss)
-        else:
-            for mfccs, poses in self.generator:
-                self.model.eval()
-                vis_data, val_loss = self.runNetwork(mfccs, poses, validate=True)
-                print(vis_data.dtype)
-                print(val_loss.dtype)
-                val_loss = val_loss.data.tolist()
-                val_losses.append(val_loss)
-                
-                predictions.append(vis_data[0])
-                targets.append(vis_data[1])
 
+
+        # test mode
+        '''
+        for mfccs, poses in self.generator:
+            self.model.eval()
+            mfccs = mfccs.float()
+            vis_data, val_loss = self.runNetwork(mfccs, poses, validate=True)
+            val_loss = val_loss.data.tolist()
+            val_losses.append(val_loss)
+            
+            predictions.append(vis_data[0])
+            targets.append(vis_data[1])
+        '''
         return train_losses, val_losses, predictions, targets
 
     def trainModel(self, max_epochs, logfldr, patience):
@@ -209,6 +204,16 @@ class AudioToBodyDynamics(object):
 
         # self.plotResults(logfldr, epoch_losses, batch_losses, val_losses)
         # return best_train_loss, best_val_loss
+        state_info = {
+            'epoch': i,
+            'epoch_losses': epoch_losses,
+            'batch_losses': batch_losses,
+            'validation_losses': val_losses,
+            'model_state_dict': self.model.state_dict(),
+            'optim_state_dict': self.optim.state_dict(),
+        }
+        path = logfldr + "model.pth" 
+        self.saveModel(state_info, path)
         return best_train_loss
 
     # def formatVizArrays(self, predictions, targets):
@@ -272,7 +277,7 @@ def createOptions():
                         help="Training batch size. Set to 1 in test")
     parser.add_argument("--val_split", type=float, default=0.2,
                         help="The fraction of the training data to use as validation")
-    parser.add_argument("--hidden_size", type=int, default=200,
+    parser.add_argument("--hidden_size", type=int, default=1024,
                         help="Dimension of the hidden representation")
     parser.add_argument("--test_model", type=str, default=None,
                         help="Location for saved model to load")
@@ -282,7 +287,7 @@ def createOptions():
                         help="Whether or not to save predictions. Use only in Test")
     parser.add_argument("--device", type=str, default="cpu",
                         help="Device to train on. Use 'cpu' if to train on cpu.")
-    parser.add_argument("--max_epochs", type=int, default=300,
+    parser.add_argument("--max_epochs", type=int, default=10,
                         help="max number of epochs to run for")
     parser.add_argument("--lr", type=float, default=1e-3,
                         help="Learning Rate for optimizer")
@@ -337,9 +342,9 @@ def main():
     #     os.makedirs(logfldr)
 
     # Train model
-    if not is_test_mode:
-        min_train, min_val = dynamics_learner.trainModel(
-            args.max_epochs, args.logfldr, args.patience)
+    # if not is_test_mode:
+    min_train, min_val = dynamics_learner.trainModel(
+        args.max_epochs, args.logfldr, args.patience)
     # else:
     #     dynamics_learner.data_iterator.reset()
     #     outputs = dynamics_learner.runEpoch()

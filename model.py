@@ -25,7 +25,8 @@ class AudioToJoints(nn.Module):
 
         # specify input features and hidden_dim
         self.lstm = nn.LSTM(self.options['input_dim'],
-                            self.options['hidden_dim'])
+                            self.options['hidden_dim'],
+                            batch_first=True)
         self.dropout = nn.Dropout(self.options['dropout'])
         self.fc = nn.Linear(self.options['hidden_dim'], self.options['output_dim'])
 
@@ -51,7 +52,11 @@ class AudioToJoints(nn.Module):
         # perform the Forward pass of the model
         output, (h_n, c_n) = self.lstm(inputs, self.init)
         # inputs.to(float)
-        output = output.view(-1, output.size()[-1])  # flatten before FC
+        print(output.shape)
+        print(output.size())
+        # output = output.view(-1, output.size()[-1])  # flatten before FC
         dped_output = self.dropout(output)
+        print(dped_output.shape)
         predictions = self.fc(dped_output)
+        print(predictions.shape)
         return predictions
