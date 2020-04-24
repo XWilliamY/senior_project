@@ -21,13 +21,13 @@ class AudioToJoints(nn.Module):
 
         # Instantiating the model
         self.init = None
+        self.options = options
 
-        hidden_dim = options['hidden_dim']
-
-        # Declare the model
-        self.lstm = nn.LSTM(options['input_dim'], hidden_dim, 1)
-        self.dropout = nn.Dropout(options['dropout'])
-        self.fc = nn.Linear(hidden_dim, 18) # for 18 joints
+        # specify input features and hidden_dim
+        self.lstm = nn.LSTM(self.options['input_dim'],
+                            self.options['hidden_dim'])
+        self.dropout = nn.Dropout(self.options['dropout'])
+        self.fc = nn.Linear(hidden_dim, self.options['output_dim'])
 
         self.initialize()
 

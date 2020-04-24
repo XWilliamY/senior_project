@@ -33,11 +33,10 @@ np.random.seed(1234)
 class AudioToBodyDynamics(object):
 
     def __init__(self, args, dataset, is_test=False):
-        # TODO
         super(AudioToBodyDynamics, self).__init__()
 
         self.is_test_mode = is_test
-        self.generator = dataset_generator
+        self.generator = dataset
 
         # Refresh data configuration from checkpoint
         if self.is_test_mode:
@@ -85,29 +84,37 @@ class AudioToBodyDynamics(object):
     #     self.data_iterator.processTestData(upsample_times=upsample_times)
 
     def runNetwork(self, inputs, targets, validate=False):
-        """
-        Train on one given mfcc pose pair
-        Args:
-             inputs (array): [batch, seq_len, mfcc_features * 3]
-             targets (array): [batch, seq_len, 19 * 2 poses]
-        Returns:
-             predictions, truth, loss
-        """
-
         def to_numpy(x):
-            # import from gpu device to cpu, convert to numpy
             return x.cpu().data.numpy()
 
+        # Set up inputs to the network
+        # batch_info = self.data_iterator.nextBatch(is_test=validate)
+        # in_batch, out_batch, mask_batch = batch_info
+        # inputs = Variable(torch.FloatTensor(in_batch).to(self.device))
+        # targets = Variable(torch.FloatTensor(out_batch).to(self.device))
+        # masks = Variable(torch.FloatTensor(mask_batch).to(self.device))
+
+        # Run the network
         predictions = self.model.forward(inputs)
 
         # Get loss in MSE of pose coordinates
         loss = self.buildLoss(predictions, targets)
 
         # # Get loss in pixel space
+        # pixel_predictions = self.data_iterator.toPixelSpace(to_numpy(predictions))
+        # pixel_predictions = torch.FloatTensor(pixel_predictions).to(self.device)
+        #
+        # pixel_targets = self.data_iterator.toPixelSpace(out_batch)
+        # pixel_targets = torch.FloatTensor(pixel_targets).to(self.device)
+        # _, frame_loss = self.buildLoss(pixel_predictions, pixel_targets, masks)
+        #
+        # frame_loss = frame_loss / pixel_targets.size()[1]
+        # # Gives the average deviation of prediction from target pixel
+        # pixel_loss = torch.mean(torch.sqrt(frame_loss))
+
         return (to_numpy(predictions), to_numpy(targets)), loss
 
     def runEpoch(self):
-        # TODO
         train_losses = [], []
         val_losses = [], []
         predictions, targets = [], []
@@ -134,7 +141,6 @@ class AudioToBodyDynamics(object):
         return train_losses, val_losses
 
     def trainModel(self, max_epochs, logfldr, patience):
-        # TODO
         log.debug("Training model")
         epoch_losses = []
         batch_losses = []
@@ -240,7 +246,6 @@ class AudioToBodyDynamics(object):
 
 
 def createOptions():
-    #TODO
     # Default configuration for PianoNet
     parser = argparse.ArgumentParser(
         description="Pytorch: Audio To Body Dynamics Model"

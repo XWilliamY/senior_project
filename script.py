@@ -14,7 +14,7 @@ dataset = AudioToPosesDataset(mfcc_file, pose_file, seq_len)
 print(dataset.getDataDims())
 print(dataset.getDimsPerBatch())
 
-params = {'batch_size':1,
+params = {'batch_size':4,
           'shuffle':False,
           'num_workers': 1
           }
@@ -25,7 +25,7 @@ for epoch in range(1):
     count = 0
     
     for mfccs, poses in generator:
-        print(mfccs.shape, poses.shape, count)
+        # print(mfccs.shape, poses.shape, count)
         count += 1
 
         # model computations
