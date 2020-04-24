@@ -20,7 +20,7 @@ params = {'batch_size':4,
           }
 
 generator = data.DataLoader(dataset, **params)
-
+print(generator.dataset.getDimsPerBatch())
 for epoch in range(1):
     count = 0
     

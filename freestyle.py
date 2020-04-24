@@ -31,19 +31,25 @@ np.random.seed(1234)
 
 
 class AudioToBodyDynamics(object):
+    """
+    Defines a wrapper class for training and evaluating a model. 
+    Inputs:
+           args    (argparse object):      model settings
+           dataset (pytorch Dataloader):   DataLoader wrapper around Dataset
+    """
 
-    def __init__(self, args, dataset, is_test=False):
+    def __init__(self, args, generator, is_test=False):
         # TODO
         super(AudioToBodyDynamics, self).__init__()
 
         self.is_test_mode = is_test
-        self.generator = dataset_generator
+        self.generator = generator
 
         # Refresh data configuration from checkpoint
         if self.is_test_mode:
             self.loadDataCheckpoint(args.test_model, args.upsample_times)
 
-        input_dim, output_dim = #self.data_iterator.getInOutDimensions()
+        input_dim, output_dim = self.generator.dataset.getDimsPerBatch()
 
         # construct the model
         model_options = {
@@ -56,6 +62,7 @@ class AudioToBodyDynamics(object):
             'trainable_init': args.trainable_init
         }
         self.device = args.device
+        print(self.device)
         self.log_frequency = args.log_frequency
         self.upsample_times = args.upsample_times
         self.model = AudioToJoints(model_options).cuda(args.device)
@@ -67,7 +74,8 @@ class AudioToBodyDynamics(object):
 
     # loss function
     def buildLoss(self, predictions, targets):
-        square_diff = (rnn_out - target)**2
+        targets = targets.reshape(-1, 38)
+        square_diff = (predictions - targets)**2
         out = torch.sum(square_diff, 1, keepdim=True)
         return torch.mean(out)
 
@@ -108,30 +116,35 @@ class AudioToBodyDynamics(object):
 
     def runEpoch(self):
         # TODO
-        train_losses = [], []
-        val_losses = [], []
+        train_losses = []
+        val_losses = []
         predictions, targets = [], []
 
-        for mfccs, poses in self.generator:
-            self.model.train() # pass train flag to model
-            _, train_loss = self.runNetwork(mfccs, poses, validate=False)
-            self.optim.zero_grad()
-            train_loss.backward()
-            self.optim.step()
+        if not self.is_test_mode:
+            for mfccs, poses in self.generator:
+                self.model.train() # pass train flag to model
+                mfccs = mfccs.float()
+                # poses = poses.float()
+                _, train_loss = self.runNetwork(mfccs, poses, validate=False)
+                self.optim.zero_grad()
+                train_loss.backward()
+                self.optim.step()
 
-            train_loss = train_loss.data.tolist()
-            train_losses.append(train_loss)
+                train_loss = train_loss.data.tolist()
+                train_losses.append(train_loss)
+        else:
+            for mfccs, poses in self.generator:
+                self.model.eval()
+                vis_data, val_loss = self.runNetwork(mfccs, poses, validate=True)
+                print(vis_data.dtype)
+                print(val_loss.dtype)
+                val_loss = val_loss.data.tolist()
+                val_losses.append(val_loss)
+                
+                predictions.append(vis_data[0])
+                targets.append(vis_data[1])
 
-        for mfccs, poses in self.generator:
-            self.model.eval()
-            vis_data, val_loss = self.runNetwork(validate=True)
-            val_loss = val_loss.data.tolist()
-            val_losses.append(val_loss)
-
-            predictions.append(vis_data[0])
-            targets.append(vis_data[1])
-
-        return train_losses, val_losses
+        return train_losses, val_losses, predictions, targets
 
     def trainModel(self, max_epochs, logfldr, patience):
         # TODO
@@ -143,18 +156,18 @@ class AudioToBodyDynamics(object):
         best_train_loss, best_val_loss = float('inf'), float('inf')
 
         for i in range(max_epochs):
-            iter_loss = self.runEpoch()
-            iter_mean = np.mean(iter_loss[0]), np.mean(iter_loss[1])
-            iter_val_mean = np.mean(iter_val[0]), np.mean(iter_val[1])
+            iter_train, iter_val, predictions, targets = self.runEpoch()
+            iter_mean = np.mean(iter_train[0]), np.mean(iter_train[1])
+            # iter_val_mean = np.mean(iter_val[0]), np.mean(iter_val[1])
 
             epoch_losses.append(iter_mean)
-            batch_losses.extend(iter_loss)
-            val_losses.append(iter_val_mean)
+            batch_losses.extend(iter_train)
+            # val_losses.append(iter_val_mean)
 
             log.info("Epoch {} / {}".format(i, max_epochs))
             log.info("Training Loss (1980 x 1080): {}".format(iter_mean))
-            log.info("Validation Loss (1980 x 1080): {}".format(iter_val_mean))
-
+            # log.info("Validation Loss (1980 x 1080): {}".format(iter_val_mean))
+            '''
             improved = iter_val_mean[1] < best_loss
             if improved:
                 best_loss = iter_val_mean[1]
@@ -192,9 +205,11 @@ class AudioToBodyDynamics(object):
             #         save_path = os.path.join(
             #             logfldr, "Epoch_{}/pca_{}.png".format(i, j))
             #         self.visualizePCA(predictions[0], targets[0], j, save_path)
+            '''
 
-        self.plotResults(logfldr, epoch_losses, batch_losses, val_losses)
-        return best_train_loss, best_val_loss
+        # self.plotResults(logfldr, epoch_losses, batch_losses, val_losses)
+        # return best_train_loss, best_val_loss
+        return best_train_loss
 
     # def formatVizArrays(self, predictions, targets):
     #     final_pred, final_targ = [], []
@@ -265,7 +280,7 @@ def createOptions():
                         help="Visualize the output of the model. Use only in Test")
     parser.add_argument("--save_predictions", type=bool, default=True,
                         help="Whether or not to save predictions. Use only in Test")
-    parser.add_argument("--device", type=str, default="cuda:0",
+    parser.add_argument("--device", type=str, default="cpu",
                         help="Device to train on. Use 'cpu' if to train on cpu.")
     parser.add_argument("--max_epochs", type=int, default=300,
                         help="max number of epochs to run for")
@@ -299,10 +314,10 @@ def main():
     args = createOptions()
     args.device = torch.device(args.device)
     # data_loc = args.data
-    # is_test_mode = args.test_model is not None
+    is_test_mode = args.test_model is not None
 
     root_dir = 'data/'
-    mfcc_file = root_dir + 'VEE5qqDPVGY_153_7878_mfccs.npy'
+    mfcc_file = root_dir + 'VEE5qqDPVGY_210_9810_mfccs.npy'
     pose_file = root_dir + 'processed_compiled_data_line_0.npy'
 
     seq_len = 3
@@ -324,7 +339,7 @@ def main():
     # Train model
     if not is_test_mode:
         min_train, min_val = dynamics_learner.trainModel(
-            args.max_epochs, logfldr, args.patience)
+            args.max_epochs, args.logfldr, args.patience)
     # else:
     #     dynamics_learner.data_iterator.reset()
     #     outputs = dynamics_learner.runEpoch()

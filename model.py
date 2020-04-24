@@ -27,7 +27,7 @@ class AudioToJoints(nn.Module):
         self.lstm = nn.LSTM(self.options['input_dim'],
                             self.options['hidden_dim'])
         self.dropout = nn.Dropout(self.options['dropout'])
-        self.fc = nn.Linear(hidden_dim, self.options['output_dim'])
+        self.fc = nn.Linear(self.options['hidden_dim'], self.options['output_dim'])
 
         self.initialize()
 
@@ -38,6 +38,7 @@ class AudioToJoints(nn.Module):
                 if 'weight' in param_name:
                     weight = getattr(self.lstm, param_name)
                     init.xavier_normal_(weight.data)
+                    print(weight.data.dtype)
                 else:
                     bias = getattr(self.lstm, param_name)
                     init.uniform_(bias.data, 0.25, 0.5)
@@ -49,6 +50,7 @@ class AudioToJoints(nn.Module):
     def forward(self, inputs):
         # perform the Forward pass of the model
         output, (h_n, c_n) = self.lstm(inputs, self.init)
+        # inputs.to(float)
         output = output.view(-1, output.size()[-1])  # flatten before FC
         dped_output = self.dropout(output)
         predictions = self.fc(dped_output)
