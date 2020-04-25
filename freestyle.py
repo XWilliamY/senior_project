@@ -2,7 +2,7 @@ import torch
 from torch import optim
 from torch.autograd import Variable
 from torch.utils import data
-from classes import AudioToPosesDataset
+from classes import AudioToPosesDataset, PosesToPosesDataset
 import matplotlib.pyplot as plt
 import os
 import argparse
@@ -349,6 +349,7 @@ def main():
     pose_file = None
     seq_len = 3
 
+    '''
     # determine whether freestyle or not
     if args.freestyle: # needs audio file
         if args.audio_file:
@@ -365,11 +366,12 @@ def main():
         mfcc_file = root_dir + 'VEE5qqDPVGY_210_9810_mfccs.npy'
         pose_file = root_dir + 'processed_compiled_data_line_0.npy'
 
-
     print(mfcc_file)
     print(pose_file)
     dataset = AudioToPosesDataset(mfcc_file, pose_file, seq_len)
-
+    '''
+    pose_file = root_dir + 'processed_compiled_data_line_0.npy'
+    dataset = PosesToPosesDataset(pose_file, seq_len)
 
     params = {'batch_size':10,
               'shuffle':False,
