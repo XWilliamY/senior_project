@@ -106,8 +106,6 @@ class AudioToBodyDynamics(object):
         targets = Variable(torch.DoubleTensor(targets).to(self.device))
 
         predictions = self.model.forward(inputs)
-        print("prediction shapes")
-        print(predictions.shape)
 
         # Get loss in MSE of pose coordinates
         loss = self.buildLoss(predictions, targets)
