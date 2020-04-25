@@ -89,6 +89,7 @@ class AudioToJointsThree(nn.Module):
     def forward(self, inputs):
         # perform the Forward pass of the model
         output, (h_n, c_n) = self.lstm(inputs, self.init)
+        output = output.reshape(-1, self.options['hidden_dim'])
         predictions = self.fc(output)
         return predictions
 
@@ -135,4 +136,7 @@ class AudioToJoints(nn.Module):
         output = output.reshape(-1, self.options['hidden_dim'])
         dped_output = self.dropout(output)
         predictions = self.fc(dped_output)
+        predictions = predictions.reshape(-1,
+                                          self.options['seq_len'],
+                                          self.options['output_dim'])
         return predictions
