@@ -46,6 +46,7 @@ class AudioToBodyDynamics(object):
 
         input_dim, output_dim = generator.dataset.getDimsPerBatch()
         model_options = {
+            'seq_len': args.seq_len,
             'device': args.device,
             'dropout': args.dp,
             'batch_size': args.batch_size,
@@ -374,7 +375,7 @@ def main():
 
     if args.p2p:
         pose_file = root_dir + 'processed_compiled_data_line_0.npy'
-        dataset = PosesToPosesDataset(pose_file, seq_len)
+        dataset = PosesToPosesDataset(pose_file, args.seq_len)
     else:
         # determine whether freestyle or not
         if args.freestyle: # needs audio file
