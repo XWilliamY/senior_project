@@ -31,7 +31,7 @@ class AudioToBodyDynamics(object):
            dataset (pytorch Dataloader):   DataLoader wrapper around Dataset
     """
 
-    def __init__(self, args, generators, is_test=False, freestyle=False):
+    def __init__(self, args, generator, is_test=False, freestyle=False):
         # TODO
         super(AudioToBodyDynamics, self).__init__()
         self.device = args.device
@@ -39,17 +39,17 @@ class AudioToBodyDynamics(object):
 
         self.is_test_mode = is_test
         self.is_freestyle_mode = freestyle
-        self.train_generator = generators[0]
-        self.val_generator = generators[1]
+        self.generator = generator
         self.model_name = args.model_name
 
+        input_dim, output_dim = generator.dataset.getDimsPerBatch()
         model_options = {
             'device': args.device,
             'dropout': args.dp,
             'batch_size': args.batch_size,
             'hidden_dim': args.hidden_size,
-            'input_dim': args.input_dim,
-            'output_dim': args.output_dim,
+            'input_dim': input_dim,
+            'output_dim': output_dim,
             'trainable_init': args.trainable_init
         }
 
@@ -96,7 +96,11 @@ class AudioToBodyDynamics(object):
             # import from gpu device to cpu, convert to numpy
             return x.cpu().data.numpy()
 
+        print("right before predictions")
+        print(inputs.size)
+        print(targets.dtype)
         predictions = self.model.forward(inputs)
+        print("after predictions")
 
         # Get loss in MSE of pose coordinates
         loss = self.buildLoss(predictions, targets)
@@ -110,11 +114,13 @@ class AudioToBodyDynamics(object):
         val_losses = []
         predictions, targets = [], []
 
-        if not self.is_freestyle_mode:
+        if not self.is_freestyle_mode: # train
             for mfccs, poses in self.generator:
                 self.model.train() # pass train flag to model
                 # mfccs = mfccs.float()
                 # poses = poses.float()
+                print(mfccs.shape)
+                print(poses.shape)
 
                 vis_data, train_loss = self.runNetwork(mfccs, poses,
                                                 validate=False)
@@ -135,7 +141,9 @@ class AudioToBodyDynamics(object):
                 print(vis_data[1][0])
                 print(vis_data[1][0].dtype)
                 '''
+            # validate
 
+        # test or predict / play w/ model
         if self.is_freestyle_mode:
             print('freestyle mode')
             for mfccs, poses in self.generator:
@@ -279,7 +287,7 @@ def createOptions():
     parser = argparse.ArgumentParser(
         description="Pytorch: Audio To Body Dynamics Model"
     )
-    parser.add_argument('--model_name', type=str, default="AudioToJoints", required=True)
+    parser.add_argument('--model_name', type=str, default="AudioToJoints")
     # parser.add_argument("--data", type=str, default="piano_data.json",
     #                     help="Path to data file")
 
@@ -325,8 +333,6 @@ def createOptions():
                         help="The frequency with which to checkpoint the model")
     parser.add_argument("--trainable_init", action='store_false',
                         help="LSTM initial state should be trained. Default is True")
-    parser.add_argument("--input_dim")
-    parser.add_argument("--output_dim")
 
     args = parser.parse_args()
     return args
@@ -363,22 +369,17 @@ def main():
     print(mfcc_file)
     print(pose_file)
     dataset = AudioToPosesDataset(mfcc_file, pose_file, seq_len)
-    val_size = int(args.val_split * len(dataset))
-    train_size = len(dataset) - val_size
 
-    train, validate = data.random_split(dataset, [train_size, val_size])
-    
+
     params = {'batch_size':10,
               'shuffle':False,
               'num_workers': 1
               }
-    train_generator = data.DataLoader(train, **params)
-    val_generator = data.DataLoader(validate, **params)
-    
-    args.input_dim, args.output_dim = dataset.getDimsPerBatch()
+    generator = data.DataLoader(dataset, **params)
+
     # Create model
     dynamics_learner = AudioToBodyDynamics(args, 
-                                           (train, validate), 
+                                           generator,
                                            freestyle=args.freestyle)
 
     # logfldr = args.logfldr
