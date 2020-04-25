@@ -5,7 +5,7 @@ from data_utils.check_dirs import check_input_dir, check_output_dir
 from data_utils.read_desired_frames import read_desired_frames
 import soundfile as sf
 
-def convert(input_dir, output_dir, audio_file, targets=None):
+def convert(audio_file, output_dir, targets=None):
     """
     time_in_seconds * sample_rate / hop_length = frame in mfcc
     """
@@ -17,12 +17,13 @@ def convert(input_dir, output_dir, audio_file, targets=None):
     frames_per_sec = 24
     hop_length = 490
     mfccs = librosa.feature.mfcc(y=x, sr=sample_rate, n_mfcc=40, hop_length=hop_length)
-    print(mfccs.shape)
 
-    np.save(output_dir + audio_file.split('/')[-1][:-4] + "_all_mfccs.npy", mfccs)
+    save_to = output_dir + audio_file.split('/')[-1][:-4] + "_all_mfccs.npy"
+    np.save(save_to, mfccs)
     
     if targets == None:
-        return
+        # full beginning to ending frame already generated (mfccs)
+        return save_to
 
     # otherwise process targets
     for target_person_id, frame_begin, frame_end in targets:
@@ -36,7 +37,7 @@ def convert(input_dir, output_dir, audio_file, targets=None):
         # because of 0 indexing, need to increase frame_end by one
         frame_end += 1
 
-        # convert from video frames into mfcc frames 
+        # convert from video frames into seconds into mfcc frames 
         initial = round(frame_begin / 30 * sample_rate / hop_length) # assume 512 as hop length
         end = round(frame_end/ 30 * sample_rate / hop_length)        # convert to seconds
         print(end - initial)
@@ -60,9 +61,9 @@ def convert(input_dir, output_dir, audio_file, targets=None):
         np_sub_mfccs = np.transpose(np_sub_mfccs, (1, 0, 2))
         np_sub_mfccs = np_sub_mfccs.reshape(40, -1) # so librosa can read this
         print(np_sub_mfccs.shape)
-        np.save(output_dir + audio_file.split('/')[-1][:-4] + '_' + str(frame_begin) + "_" + str(frame_end) + '_mfccs.npy', np_sub_mfccs)
-        reconstructed = librosa.feature.inverse.mfcc_to_audio(np_sub_mfccs)
-        sf.write(output_dir + '_' + str(frame_begin) + "_" + str(frame_end) + '_mfccs.wav', reconstructed, sample_rate)
+        save_to = output_dir + audio_file.split(',')[-1][:-4] + '_' + str(frame_begin) + "_" + str(frame_end) + '_mfccs.npy'
+        np.save(save_to, np_sub_mfccs)
+        return save_to
 
 def main(args):
     input_dir = check_input_dir(args.input_dir)
@@ -73,7 +74,7 @@ def main(args):
     desired_person_at_frame = read_desired_frames(args.targets, frame_rate, target_frame_rate)
 
     if not args.mfcc_exists: # if it exists
-        convert(input_dir, output_dir, filename, desired_person_at_frame)
+        convert(filename, output_dir, desired_person_at_frame)
 
     
 if __name__ == '__main__':
