@@ -5,7 +5,6 @@ from __future__ import unicode_literals
 
 import torch
 from torch import optim
-from model import AudioToJoints
 from torch.autograd import Variable
 from torch.utils import data
 from classes import AudioToPosesDataset
@@ -41,14 +40,16 @@ class AudioToBodyDynamics(object):
     def __init__(self, args, generator, is_test=False, freestyle=False):
         # TODO
         super(AudioToBodyDynamics, self).__init__()
+        self.device = args.device
+        self.log_frequency = args.log_frequency
 
         self.is_test_mode = is_test
         self.is_freestyle_mode = freestyle
         self.generator = generator
+        self.model_name = args.model_name
 
         input_dim, output_dim = self.generator.dataset.getDimsPerBatch()
 
-        # construct the model
         model_options = {
             'device': args.device,
             'dropout': args.dp,
@@ -58,11 +59,16 @@ class AudioToBodyDynamics(object):
             'output_dim': output_dim,
             'trainable_init': args.trainable_init
         }
-        self.device = args.device
-        print(self.device)
-        self.log_frequency = args.log_frequency
-        self.upsample_times = args.upsample_times
-        self.model = AudioToJoints(model_options).cuda(args.device)
+
+        if args.model_name == "AudioToJointsThree":
+            from model import AudioToJointsThree
+            self.model = AudioToJointsThree(model_options).cuda(args.device)
+        elif args.model_name == "AudioToJoints":
+            from model import AudioToJoints
+            self.model = AudioToJoints(model_options).cuda(args.device)
+            
+
+        # construct the model
         self.optim = optim.Adam(self.model.parameters(), lr=args.lr)
 
         # Load checkpoint model
@@ -131,6 +137,7 @@ class AudioToBodyDynamics(object):
                 train_loss = train_loss.data.tolist()
                 train_losses.append(train_loss)
 
+                '''
                 print('='*80)
                 print("in runEpoch")
                 print('^the predicted')
@@ -139,6 +146,7 @@ class AudioToBodyDynamics(object):
                 print('^^the actual')
                 print(vis_data[1][0])
                 print(vis_data[1][0].dtype)
+                '''
 
         if self.is_freestyle_mode:
             print('freestyle mode')
@@ -230,7 +238,7 @@ class AudioToBodyDynamics(object):
             'model_state_dict': self.model.state_dict(),
             'optim_state_dict': self.optim.state_dict(),
         }
-        path = "saved_models" + "/model.pth" 
+        path = "saved_models" + "/" + self.model_name + ".pth"
         self.saveModel(state_info, path)
         return best_train_loss
 
@@ -283,6 +291,7 @@ def createOptions():
     parser = argparse.ArgumentParser(
         description="Pytorch: Audio To Body Dynamics Model"
     )
+    parser.add_argument('--model_name', type=str, default="AudioToJoints", required=True)
     # parser.add_argument("--data", type=str, default="piano_data.json",
     #                     help="Path to data file")
 
@@ -321,8 +330,6 @@ def createOptions():
                         "Give in terms of frames. 30 frames = 1 second.")
     parser.add_argument("--dp", type=float, default=0.1,
                         help="Dropout Ratio For Training")
-    parser.add_argument("--upsample_times", type=int, default=2,
-                        help="number of times to upsample")
     parser.add_argument("--numpca", type=int, default=15,
                         help="number of pca dimensions. Use -1 if no pca - "
                              "Train on XY coordinates")
@@ -395,8 +402,6 @@ def main():
         # min_train, min_val = np.mean(iter_train[0]), np.mean(iter_val[0])
         # save the predictions
         best_losses = [iter_train]
-        for index, pred in enumerate(preds):
-            print(pred.shape)
         np_preds = np.vstack(preds)
         np.save("dior.npy", np_preds)
         print(np_preds.shape)

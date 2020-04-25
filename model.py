@@ -15,14 +15,41 @@ import torch.nn.init as init
 from torch.autograd import Variable
 
 
-class AudioToJointsTwo(nn.Module):
+class AudioToJointsThree(nn.Module):
     def __init__(self, options):
-        super(AudioToJointsTwo, self).__init__()
+        super(AudioToJointsThree, self).__init__()
         self.init = None
         self.options = options
-        self.lstm_audio = nn.LSTM(self.options['input_dim'],
-                                  self.options['hidden_dim'],
-                                  batch_first=True)
+        self.lstm = nn.LSTM(self.options['input_dim'],
+                            self.options['hidden_dim'],
+                            batch_first=True,
+                            num_layers=3).double()
+        self.fc = nn.Linear(self.options['hidden_dim'],
+                            self.options['output_dim']).double()
+        self.initialize()
+
+    def initialize(self):
+        # Initialize LSTM Weights and Biases
+        for layer in self.lstm._all_weights:
+            for param_name in layer:
+                if 'weight' in param_name:
+                    weight = getattr(self.lstm, param_name)
+                    init.xavier_normal_(weight.data)
+                    print(weight.data.dtype)
+                else:
+                    bias = getattr(self.lstm, param_name)
+                    init.uniform_(bias.data, 0.25, 0.5)
+
+        # Initialize FC
+        init.xavier_normal_(self.fc.weight.data)
+        init.constant_(self.fc.bias.data, 0)
+
+    def forward(self, inputs):
+        # perform the Forward pass of the model
+        output, (h_n, c_n) = self.lstm(inputs, self.init)
+        predictions = self.fc(output)
+        return predictions
+
         
 class AudioToJoints(nn.Module):
 

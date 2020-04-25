@@ -4,16 +4,15 @@ from joints import joint_to_limb_heatmap_relationship, colors, imshow, label_can
 
 def np_to_video(processed_poses, filename):
     chunked = filename.split('/')
-    output_filename = '/'.join(chunked[:-2]) + '/videos/' + chunked[-1][:-4] + '_last.mp4'
+    # output_filename = '/'.join(chunked[:-2]) + '/videos/' + chunked[-1][:-4] + '_last.mp4'
+    output_filename = "dior.mp4"
     print(output_filename)
 
     interpolated_canvases = []
     count = 0
     for pose in processed_poses:
-        if count < 7200:
-            count += 1
-            continue
-        #break
+        if count == 1800:
+            break
         person_id = str(0) + ", " + str([0])
         interpolated_canvases.append(draw_pose_figure(person_id,
                                                       pose))
@@ -40,4 +39,4 @@ def file_to_video(filename):
     poses = np.load(filename)
     np_to_video(poses, filename)
 
-file_to_video('/Users/will.i.liam/Desktop/final_project/VEE5qqDPVGY/data/processed_compiled_data_line_0.npy')
+file_to_video('/Users/will.i.liam/Desktop/final_project/senior_project/dior.npy')
