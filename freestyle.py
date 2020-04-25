@@ -1,4 +1,5 @@
 import torch
+import torch.nn as nn
 from torch import optim
 from torch.autograd import Variable
 from torch.utils import data
@@ -41,6 +42,7 @@ class AudioToBodyDynamics(object):
         self.is_freestyle_mode = freestyle
         self.generator = generator
         self.model_name = args.model_name
+        self.ident = args.ident
 
         input_dim, output_dim = generator.dataset.getDimsPerBatch()
         model_options = {
@@ -96,15 +98,18 @@ class AudioToBodyDynamics(object):
             # import from gpu device to cpu, convert to numpy
             return x.cpu().data.numpy()
 
-        print("right before predictions")
-        print(inputs.size)
-        print(targets.dtype)
+
+        inputs = Variable(torch.DoubleTensor(inputs).to(self.device))
+        targets = Variable(torch.DoubleTensor(targets).to(self.device))
+
         predictions = self.model.forward(inputs)
-        print("after predictions")
 
         # Get loss in MSE of pose coordinates
         loss = self.buildLoss(predictions, targets)
-
+        '''
+        criterion = nn.L1Loss()
+        loss = criterion(predictions, targets)
+        '''
         # # Get loss in pixel space
         return (to_numpy(predictions), to_numpy(targets)), loss
 
@@ -119,8 +124,6 @@ class AudioToBodyDynamics(object):
                 self.model.train() # pass train flag to model
                 # mfccs = mfccs.float()
                 # poses = poses.float()
-                print(mfccs.shape)
-                print(poses.shape)
 
                 vis_data, train_loss = self.runNetwork(mfccs, poses,
                                                 validate=False)
@@ -171,7 +174,28 @@ class AudioToBodyDynamics(object):
         i, best_loss, iters_without_improvement = 0, float('inf'), 0
         best_train_loss, best_val_loss = float('inf'), float('inf')
 
+        filename = 'logs/epoch_of_model_' + str(self.ident) +'.txt'
+        state_info = {
+            'epoch': i,
+            'epoch_losses': epoch_losses,
+            'batch_losses': batch_losses,
+            'validation_losses': val_losses,
+            'model_state_dict': self.model.state_dict(),
+            'optim_state_dict': self.optim.state_dict(),
+        }
+
         for i in range(max_epochs):
+            if int(i/10) == 0:
+                if i == 0:
+                    with open(filename, 'w') as f:
+                        f.write(f"Epoch: {i} started\n")
+                else:
+                    with open(filename, 'a+') as f:
+                        f.write(f"Epoch: {i} started\n")
+                # save the model
+                path = "saved_models/" + self.model_name + str(self.ident) + ".pth"
+                self.saveModel(state_info, path)
+
             iter_train, iter_val, predictions, targets = self.runEpoch()
             iter_mean = np.mean(iter_train[0]), np.mean(iter_train[1])
             # iter_val_mean = np.mean(iter_val[0]), np.mean(iter_val[1])
@@ -226,15 +250,7 @@ class AudioToBodyDynamics(object):
 
         # self.plotResults(logfldr, epoch_losses, batch_losses, val_losses)
         # return best_train_loss, best_val_loss
-        state_info = {
-            'epoch': i,
-            'epoch_losses': epoch_losses,
-            'batch_losses': batch_losses,
-            'validation_losses': val_losses,
-            'model_state_dict': self.model.state_dict(),
-            'optim_state_dict': self.optim.state_dict(),
-        }
-        path = "saved_models" + "/" + self.model_name + ".pth"
+        path = "saved_models" + self.model_name + str(self.ident) + ".pth"
         self.saveModel(state_info, path)
         return best_train_loss
 
@@ -298,8 +314,9 @@ def createOptions():
                         help="Expects an audio file. Does not take in any pose files: model will generate according to given audio.")
     parser.add_argument("--logfldr", type=str, default=None,
                         help="Path to folder to save training information")
-    parser.add_argument("--batch_size", type=int, default=100,
+    parser.add_argument("--batch_size", type=int, default=10,
                         help="Training batch size. Set to 1 in test")
+    parser.add_argument("--seq_len", type=int, default=3)
     parser.add_argument("--val_split", type=float, default=0.2,
                         help="The fraction of the training data to use as validation")
     parser.add_argument("--hidden_size", type=int, default=1024,
@@ -333,7 +350,7 @@ def createOptions():
                         help="The frequency with which to checkpoint the model")
     parser.add_argument("--trainable_init", action='store_false',
                         help="LSTM initial state should be trained. Default is True")
-
+    parser.add_argument("--ident", type=int, help="Model identification")
     args = parser.parse_args()
     return args
 
@@ -347,7 +364,7 @@ def main():
     root_dir = 'data/'
     mfcc_file = ""
     pose_file = None
-    seq_len = 3
+    seq_len = args.seq_len
 
     # determine whether freestyle or not
     if args.freestyle: # needs audio file
@@ -365,13 +382,10 @@ def main():
         mfcc_file = root_dir + 'VEE5qqDPVGY_210_9810_mfccs.npy'
         pose_file = root_dir + 'processed_compiled_data_line_0.npy'
 
-
-    print(mfcc_file)
-    print(pose_file)
     dataset = AudioToPosesDataset(mfcc_file, pose_file, seq_len)
 
 
-    params = {'batch_size':10,
+    params = {'batch_size':args.batch_size,
               'shuffle':False,
               'num_workers': 1
               }
@@ -400,8 +414,6 @@ def main():
         best_losses = [iter_train]
         np_preds = np.vstack(preds)
         np.save("dior.npy", np_preds)
-        print(np_preds.shape)
-        print(np_preds.dtype)
 
     log.info("The best validation is : {}".format(best_losses))
 
