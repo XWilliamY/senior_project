@@ -98,7 +98,7 @@ class AudioToBodyDynamics(object):
             # import from gpu device to cpu, convert to numpy
             return x.cpu().data.numpy()
 
-
+        print(inputs.shape)
         inputs = Variable(torch.DoubleTensor(inputs).to(self.device))
         targets = Variable(torch.DoubleTensor(targets).to(self.device))
 
@@ -303,6 +303,7 @@ def createOptions():
     parser = argparse.ArgumentParser(
         description="Pytorch: Audio To Body Dynamics Model"
     )
+    parser.add_argument('--p2p', type=bool, default=False)
     parser.add_argument('--model_name', type=str, default="AudioToJoints")
     # parser.add_argument("--data", type=str, default="piano_data.json",
     #                     help="Path to data file")
@@ -366,30 +367,30 @@ def main():
     pose_file = None
     seq_len = args.seq_len
 
-    '''
-    # determine whether freestyle or not
-    if args.freestyle: # needs audio file
-        if args.audio_file:
-            # convert audio to mfcc
-            from audioToMFCC import convert
-            output_file_path = convert(args.audio_file, "", None)
-            print(output_file_path)
-            # get audio
-            mfcc_file = output_file_path
-            pose_file = None
-        else:
-            print("Missing audio file")
-    else:
-        mfcc_file = root_dir + 'VEE5qqDPVGY_210_9810_mfccs.npy'
+    if args.p2p:
         pose_file = root_dir + 'processed_compiled_data_line_0.npy'
+        dataset = PosesToPosesDataset(pose_file, seq_len)
+    else:
+        # determine whether freestyle or not
+        if args.freestyle: # needs audio file
+            if args.audio_file:
+                # convert audio to mfcc
+                from audioToMFCC import convert
+                output_file_path = convert(args.audio_file, "", None)
+                print(output_file_path)
+                # get audio
+                mfcc_file = output_file_path
+                pose_file = None
+            else:
+                print("Missing audio file")
+        else:
+            mfcc_file = root_dir + 'VEE5qqDPVGY_210_9810_mfccs.npy'
+            pose_file = root_dir + 'processed_compiled_data_line_0.npy'
 
-    print(mfcc_file)
-    print(pose_file)
+            print(mfcc_file)
+            print(pose_file)
 
-    dataset = AudioToPosesDataset(mfcc_file, pose_file, seq_len)
-    '''
-    pose_file = root_dir + 'processed_compiled_data_line_0.npy'
-    dataset = PosesToPosesDataset(pose_file, seq_len)
+        dataset = AudioToPosesDataset(mfcc_file, pose_file, seq_len)
 
     params = {'batch_size':args.batch_size,
               'shuffle':False,
