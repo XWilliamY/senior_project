@@ -1,6 +1,6 @@
 import torch
 from torch.utils import data
-from classes import AudioToPosesDataset
+from classes import AudioToPosesDataset, PosesToPosesDataset
 from model import AudioToJoints
 import torch.nn as nn
 
@@ -9,10 +9,8 @@ mfcc_file = root_dir + 'VEE5qqDPVGY_210_9810_mfccs.npy'
 pose_file = root_dir + 'processed_compiled_data_line_0.npy'
 pose_file = None
 
-seq_len = 3
+seq_len = 9
 dataset = AudioToPosesDataset(mfcc_file, pose_file, seq_len)
-train_size = int(0.8 * len(dataset))
-test_size = len(dataset) - train_size
 
 '''
 print(dataset.hasPoses())
@@ -21,15 +19,13 @@ print(dataset.getDataDims())
 print(dataset.getDimsPerBatch())
 '''
 
-params = {'batch_size':4,
+params = {'batch_size':128,
           'shuffle':False,
           'num_workers': 1
           }
 
-print(len(dataset))
-train, validate = data.random_split(dataset, [train_size, test_size])
-print(len(train))
-print(len(validate))
+
+
 generator = data.DataLoader(dataset, **params)
 print(generator.dataset.getDimsPerBatch())
 for epoch in range(1):
@@ -40,3 +36,20 @@ for epoch in range(1):
         count += 1
 
         # model computations
+
+pose_file = root_dir + 'processed_compiled_data_line_0.npy'
+seq_len = 1
+dataset = PosesToPosesDataset(pose_file, seq_len)
+params = {'batch_size':1,
+          'shuffle':False,
+          'num_workers': 1
+          }
+generator = data.DataLoader(dataset, **params)
+print(generator.dataset.getDimsPerBatch())
+for epoch in range(1):
+    count = 0
+    for inputs, outputs in generator:
+        print('='*80)
+        print(inputs[0, 0, :10])
+        print(outputs[0, 0, :10])
+        count += 1
