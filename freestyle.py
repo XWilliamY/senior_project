@@ -1,8 +1,3 @@
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-from __future__ import unicode_literals
-
 import torch
 from torch import optim
 from torch.autograd import Variable
@@ -14,7 +9,6 @@ import argparse
 import logging
 import numpy as np
 import json
-#from visualize import visualizeKeypoints
 
 '''
 This script takes an input of audio MFCC features and uses
@@ -37,7 +31,7 @@ class AudioToBodyDynamics(object):
            dataset (pytorch Dataloader):   DataLoader wrapper around Dataset
     """
 
-    def __init__(self, args, generator, is_test=False, freestyle=False):
+    def __init__(self, args, generators, is_test=False, freestyle=False):
         # TODO
         super(AudioToBodyDynamics, self).__init__()
         self.device = args.device
@@ -45,18 +39,17 @@ class AudioToBodyDynamics(object):
 
         self.is_test_mode = is_test
         self.is_freestyle_mode = freestyle
-        self.generator = generator
+        self.train_generator = generators[0]
+        self.val_generator = generators[1]
         self.model_name = args.model_name
-
-        input_dim, output_dim = self.generator.dataset.getDimsPerBatch()
 
         model_options = {
             'device': args.device,
             'dropout': args.dp,
             'batch_size': args.batch_size,
             'hidden_dim': args.hidden_size,
-            'input_dim': input_dim,
-            'output_dim': output_dim,
+            'input_dim': args.input_dim,
+            'output_dim': args.output_dim,
             'trainable_init': args.trainable_init
         }
 
@@ -77,11 +70,6 @@ class AudioToBodyDynamics(object):
 
     # loss function
     def buildLoss(self, predictions, targets):
-        '''
-        print("in build loss")
-        print(predictions.shape)
-        print(targets.shape)
-        '''
         square_diff = (predictions - targets)**2
         out = torch.sum(square_diff, 1, keepdim=True)
         return torch.mean(out)
@@ -337,6 +325,8 @@ def createOptions():
                         help="The frequency with which to checkpoint the model")
     parser.add_argument("--trainable_init", action='store_false',
                         help="LSTM initial state should be trained. Default is True")
+    parser.add_argument("--input_dim")
+    parser.add_argument("--output_dim")
 
     args = parser.parse_args()
     return args
@@ -373,18 +363,23 @@ def main():
     print(mfcc_file)
     print(pose_file)
     dataset = AudioToPosesDataset(mfcc_file, pose_file, seq_len)
+    val_size = int(args.val_split * len(dataset))
+    train_size = len(dataset) - val_size
 
-    print(dataset.getDataDims())
-    print(dataset.getDimsPerBatch())
+    train, validate = data.random_split(dataset, [train_size, val_size])
     
     params = {'batch_size':10,
               'shuffle':False,
               'num_workers': 1
               }
-    generator = data.DataLoader(dataset, **params)
-
+    train_generator = data.DataLoader(train, **params)
+    val_generator = data.DataLoader(validate, **params)
+    
+    args.input_dim, args.output_dim = dataset.getDimsPerBatch()
     # Create model
-    dynamics_learner = AudioToBodyDynamics(args, generator, freestyle=args.freestyle)
+    dynamics_learner = AudioToBodyDynamics(args, 
+                                           (train, validate), 
+                                           freestyle=args.freestyle)
 
     # logfldr = args.logfldr
     # if not os.path.isdir(logfldr):
