@@ -98,11 +98,16 @@ class AudioToBodyDynamics(object):
             # import from gpu device to cpu, convert to numpy
             return x.cpu().data.numpy()
 
-        print(inputs.shape)
+        
         inputs = Variable(torch.DoubleTensor(inputs).to(self.device))
+
+        # reshape targets into (batch * seq_len, input features)
+        targets = targets.reshape(-1, 38)
         targets = Variable(torch.DoubleTensor(targets).to(self.device))
 
         predictions = self.model.forward(inputs)
+        print("prediction shapes")
+        print(predictions.shape)
 
         # Get loss in MSE of pose coordinates
         loss = self.buildLoss(predictions, targets)
