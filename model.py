@@ -18,43 +18,59 @@ class Residual(nn.Module):
     def __init__(self, linear_hidden = 1024, time = 1024):
         super(Residual, self).__init__()
         self.layer = nn.Sequential(
-            nn.Linear(linear_hidden, linear_hidden).double(),
-            nn.BatchNorm1d(time).double(),
-            nn.ReLU().double(),
-            nn.Linear(linear_hidden, linear_hidden).double(),
-            nn.BatchNorm1d(time).double(),
-            nn.ReLU().double()
+            nn.Linear(linear_hidden, linear_hidden),
+            nn.BatchNorm1d(time),
+            nn.ReLU(),
+            nn.Linear(linear_hidden, linear_hidden),
+            nn.BatchNorm1d(time),
+            nn.ReLU()
             )
-        def forward(self, input):
-            output = self.layer(input)
-            return output
+    def forward(self, inputs):
+        output = self.layer(inputs)
+        return output
         
 class JointsToJoints(nn.Module):
     def __init__(self, options):
-        super(JointsToJoints, self).__init_()
+        super(JointsToJoints, self).__init__()
 
         # linear 1
         self.options = options
         self.linear_encode = nn.Linear(self.options['input_dim'],
-                                       self.options['hidden_dim']).double()
+                                       self.options['hidden_dim'])
         # temporal batch normalization
         self.linear_encode_bn = nn.BatchNorm1d(self.options['hidden_dim'])
         self.linear_encode_tanh = nn.Tanh()
-        self.dropout_encode = nn.Dropout(self.options['dropout']).double() 
+        self.dropout_encode = nn.Dropout(self.options['dropout'])
 
         # residuals
         self.res1 = Residual(linear_hidden = 1024)
         self.res2 = Residual(linear_hidden = 1024)
-        self.dropout = nn.Dropout(p=0.5).double()
+        self.dropout = nn.Dropout(p=0.5)
         self.linear_decode = nn.Linear(self.options['hidden_dim'],
-                                       self.options['output_dim']).double()
+                                       self.options['output_dim'])
 
     def forward(self, inputs):
-        output, (h_n, c_n) = self.lstm(inputs, self.init)
-        # inputs.to(float)
-        # output = output.view(-1, output.size()[-1])  # flatten before FC
-        dped_output = self.dropout(output)
-        predictions = self.fc(dped_output)
+        print(inputs.shape)
+        # flatten to (batch * seq_len, input dimensions)
+        inputs = inputs.reshape(-1, self.options['input_dim'])
+
+        # linear 1
+        encoded = self.linear_encode(inputs)
+        bn = self.linear_encode_bn(encoded)
+        tanhed = self.linear_encode_tanh(bn)
+        dropped = self.dropout_encode(tanhed)
+
+        # residuals
+        output_res1 = self.res1(dropped) + dropped
+        output_res2 = self.res2(output_res1) + output_res1
+        dropped = self.dropout(output_res2)
+        decoded = self.linear_decode(dropped)
+
+        predictions = decoded.reshape(-1,
+                                      self.options['seq_len'],
+                                      self.options['output_dim'])
+        return predictions
+
 
         
 class AudioToJointsThree(nn.Module):
@@ -91,6 +107,9 @@ class AudioToJointsThree(nn.Module):
         output, (h_n, c_n) = self.lstm(inputs, self.init)
         output = output.reshape(-1, self.options['hidden_dim'])
         predictions = self.fc(output)
+        predictions = predictions.reshape(-1,
+                                          self.options['seq_len'],
+                                          self.options['output_dim'])
         return predictions
 
         
