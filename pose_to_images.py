@@ -103,18 +103,39 @@ def main(args):
     input_dir = check_input_dir(args.input_dir)
     output_dir = check_output_dir(args.output_dir)
 
-    draw_all_poses(input_dir, output_dir)
+    # write images to:
+    output_dir_images = output_dir + 'images/'
+
+    # check fps of mp4
+    if args.check_fps:
+        filename_array = output_dir.split('/')
+        video_filename = output_dir + filename_array[-2] + '.mp4'
+        print(video_filename)
+    
+        video = cv2.VideoCapture(video_filename)
+        fps = video.get(cv2.CAP_PROP_FPS)
+
+        print(fps)
+        # write to fps data
+        fps_name = output_dir + filename_array[-2] + "_fps.txt"
+        with open(fps_name, 'w') as f:
+            f.write(f'{fps}\n')
+    
+    draw_all_poses(input_dir, output_dir_images)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--input_dir",
-                    help="Path to directory containing json keypoints",
-                    default='/Users/will.i.liam/Desktop/final_project/VEE5qqDPVGY/outputVEE5qqDPVGY/',
-                    type=str)
-    parser.add_argument("--output_dir",
-                        help="Path to output directory containing images",
-                        default='/Users/will.i.liam/Desktop/final_project/VEE5qqDPVGY/images/',
+                        help="Path to directory containing json inputs",
+                        default='/Users/will.i.liam/Desktop/final_project/VEE5qqDPVGY/outputVEE5qqDPVGY/',
                         type=str)
+    parser.add_argument("--output_dir",
+                        help="Path to desired output directory. Files will be named w/ directory name",
+                        default='/Users/will.i.liam/Desktop/final_project/VEE5qqDPVGY/',
+                        type=str)
+    parser.add_argument("--check_fps",
+                        help="Flag to check fps of video, default to False, if True, include .mp4 in dir",
+                        default=False)
     
     args = parser.parse_args()
     main(args)

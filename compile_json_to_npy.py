@@ -19,7 +19,7 @@ def get_json_names(input_dir):
     json_file_names = sorted(json_file_names)
     return json_file_names
 
-def compile_all_poses(input_dir, output_dir, desired_person_at_frame):
+def compile_all_poses(input_dir, output_dir, desired_person_at_frame, video_id):
     """
     Combines all json files into one massive json according to person_per_frame
 
@@ -38,9 +38,8 @@ def compile_all_poses(input_dir, output_dir, desired_person_at_frame):
     json_files = get_json_names(input_dir)
 
     # iterate through each pose, frame_begin, frame_end tuple
-    count = 0
+    line = 0
     for target_person_id, frame_begin, frame_end in desired_person_at_frame:
-        print(frame_begin, frame_end)
         # go through the targeted ones
         for json_file in json_files[frame_begin:frame_end + 1]:
             data = json.load(open(input_dir + json_file))
@@ -58,37 +57,49 @@ def compile_all_poses(input_dir, output_dir, desired_person_at_frame):
                     np_keypoints = np.array(keypoints).reshape(-1, 2)
                     all_poses.append(np_keypoints)
         # save the file
-        np.save(output_dir + 'compiled_data_line_' + str(count) + '.npy', np.array(all_poses))
-        print(np.array(all_poses).shape)
+        filename = f"{output_dir}compiled_{video_id}_line_{line}.npy"
+        npy_save_file = filename
+        np.save(npy_save_file, np.array(all_poses))
+        
         # reset
-
         all_poses = []
-        count += 1
+        line += 1
 
 def main(args):
     input_dir = check_input_dir(args.input_dir)
     output_dir = check_output_dir(args.output_dir)
-    frame_rate = 24
-    target_frame_rate = 24
-    desired_person_at_frame = read_desired_frames(args.targets, frame_rate, target_frame_rate)
-    print('='*80)
-    print(desired_person_at_frame)
-    compile_all_poses(input_dir, output_dir, desired_person_at_frame)
+
+    output_path = output_dir.split('/')
+
+    if args.video_id:
+        video_id = args.video_id
+    else:
+        video_id = output_path[-2]
+    frame_rate = 30
+    fps_txt = '/'.join(output_path) + output_path[-2] + "_fps.txt"
+    with open(fps_txt, 'r') as f:
+        line = f.readline()
+        fps = int(float(line.split()[0]))
+    target_frame_rate = 30
+    targets = '/'.join(output_path) + output_path[-2] + "_targets.txt"
+    desired_person_at_frame = read_desired_frames(targets, frame_rate, target_frame_rate)
+
+    # append '/data/' to output dir
+    data_output_dir = check_output_dir(output_dir + 'data/')
+    compile_all_poses(input_dir, data_output_dir, desired_person_at_frame, video_id)
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--input_dir",
-                    help="Path to directory containing json keypoints",
-                    default='/Users/will.i.liam/Desktop/final_project/VEE5qqDPVGY/outputVEE5qqDPVGY/',
-                    type=str)
+                        help="Path to directory containing json keypoints",
+                        default='/Users/will.i.liam/Desktop/final_project/w5BqAXwflW0/keypoints',
+                        type=str)
     parser.add_argument("--output_dir",
-                        help="Path to desired output directory to save data file to",
-                        default='/Users/will.i.liam/Desktop/final_project/VEE5qqDPVGY/data/',
+                        help="Path to desired output directory to save data relevant files to. A data directory will be created in the provided location",
                         type=str)
+    parser.add_argument("--video_id",
+                        default=None)
 
-    parser.add_argument('--targets',
-                        help="Direct me to list of target per frame",
-                        default="/Users/will.i.liam/Desktop/final_project/VEE5qqDPVGY/targets.txt",
-                        type=str)
     args = parser.parse_args()
     main(args)

@@ -39,11 +39,11 @@ def preprocess_poses(compiled_poses):
 
     Applies simple filtering, interpolation, and smoothing
     """
+    print(compiled_poses.shape)
     metadata = 24
     compiled_poses = scale_to_30fps(compiled_poses, metadata)
-
-    print(compiled_poses.shape)
-
+    
+    
     # filter, interpolate, and smooth
     for i in range(19): # evaluate per body part
         # x or y coordinate
@@ -88,13 +88,31 @@ def write_to_video(processed_poses):
     out.release()
 
 def main(args):
-    input_dir = check_input_dir(args.input_dir)
+    # if none, then get current working dir for input_dir
+    if args.input_dir:
+        input_dir = check_input_dir(args.input_dir)
+    else: # assuming cwd
+        input_dir = check_output_dir(args.input_dir)
     output_dir = check_output_dir(args.output_dir)
-    compiled_poses = np.load(input_dir + args.input_file)
-    processed = preprocess_poses(compiled_poses)
-    # save file
-    np.save(output_dir + "processed_" + args.input_file, processed)
-    print(processed.shape)
+
+    # if specific input file is given, process only that one
+    if args.input_file:
+        input_filename = args.input_file.split('_')
+        compiled_poses = np.load(input_dir + args.input_file)
+        processed = preprocess_poses(compiled_poses)
+        # compiled_{id}_line_{line}.npy
+        filename = f"processed_{'_'.join(input_filename[1:])}"
+        np.save(output_dir + filename, processed)
+        print(processed.shape)
+    else:
+        # fetch every input file from input dir
+        import glob
+        for input_filename in glob.glob(input_dir + "compiled*.npy"):
+            compiled_poses = np.load(input_filename)
+            processed = preprocess_poses(compiled_poses)
+            input_filename = input_filename.split('/')[-1].split('_')
+            np.save(output_dir + f"processed_{'_'.join(input_filename[1:])}", processed)
+        
     # generate video
     if args.write_video:
         write_to_video(processed)
@@ -103,21 +121,25 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--input_dir",
                         help="Path to directory containing relevant npy data",                        
-                        default='/Users/will.i.liam/Desktop/final_project/VEE5qqDPVGY/data/',
+                        default=None,
                         type=str)
 
     parser.add_argument("--input_file",
                         help="Name of specific file to preprocess",
-                        default='compiled_data_line_0.npy',
+                        default=None,
                         type=str)
     
     parser.add_argument("--output_dir",
                         help="Path to output directory, default will be same as input_dir",
-                        default='/Users/will.i.liam/Desktop/final_project/VEE5qqDPVGY/data/',
+                        default=None,
                         type=str)
 
     parser.add_argument('--write_video',
                         default=False,
                         type=bool)
+
+    parser.add_argument('--video_id',
+                        default=None)
+    
     args = parser.parse_args()
     main(args)
