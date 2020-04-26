@@ -62,6 +62,9 @@ class AudioToBodyDynamics(object):
         elif args.model_name == "AudioToJoints":
             from model import AudioToJoints
             self.model = AudioToJoints(model_options).cuda(args.device)
+        elif args.model_name == 'JointsToJoints':
+            from model import JointsToJoints
+            self.model = JointsToJoints(model_options).cuda(args.device).double()
             
 
         # construct the model
