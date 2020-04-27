@@ -110,7 +110,6 @@ class AudioToBodyDynamics(object):
 
         predictions = self.model.forward(inputs)
         print("prediction shapes")
-        print(predictions.shape)
 
         # Get loss in MSE of pose coordinates
         loss = self.buildLoss(predictions, targets)
@@ -123,23 +122,29 @@ class AudioToBodyDynamics(object):
 
     def runEpoch(self):
         # TODO
-        train_losses = []
+        train_losses = [] #coeff_losses
         val_losses = []
         predictions, targets = [], []
 
         if not self.is_freestyle_mode: # train
+            # for each data point
+            count = 0
             for mfccs, poses in self.generator:
                 self.model.train() # pass train flag to model
                 # mfccs = mfccs.float()
                 # poses = poses.float()
 
+                # (), loss, pixel_loss
+                # so coeff_loss = train_loss
+                # _,            = ()
                 vis_data, train_loss = self.runNetwork(mfccs, poses,
                                                 validate=False)
+                print("train loss")
                 self.optim.zero_grad()
                 train_loss.backward()
                 self.optim.step()
-
                 train_loss = train_loss.data.tolist()
+                print(train_loss, count)
                 train_losses.append(train_loss)
 
                 '''
@@ -152,6 +157,7 @@ class AudioToBodyDynamics(object):
                 print(vis_data[1][0])
                 print(vis_data[1][0].dtype)
                 '''
+                count += 1
             # validate
 
         # test or predict / play w/ model
@@ -204,7 +210,9 @@ class AudioToBodyDynamics(object):
                 path = "saved_models/" + self.model_name + str(self.ident) + ".pth"
                 self.saveModel(state_info, path)
 
+            # train_info, val_info, predictions, targets
             iter_train, iter_val, predictions, targets = self.runEpoch()
+
             iter_mean = np.mean(iter_train[0]), np.mean(iter_train[1])
             # iter_val_mean = np.mean(iter_val[0]), np.mean(iter_val[1])
 
