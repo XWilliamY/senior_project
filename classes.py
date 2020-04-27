@@ -56,7 +56,7 @@ class AudioToPosesDirDataset(Dataset):
 
         X = torch.from_numpy(X)
         y = torch.from_numpy(y)
-
+        print(f"Obtained from {self.processed_poses_names[file_idx]}")
         return X, y
 
 
