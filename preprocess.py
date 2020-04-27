@@ -33,15 +33,13 @@ def scale_to_30fps(compiled_poses, metadata):
     return compiled_poses
     
 
-def preprocess_poses(compiled_poses):
+def preprocess_poses(compiled_poses, fps):
     """
     Takes in a pre-loaded, compiled numpy array of desired poses
 
     Applies simple filtering, interpolation, and smoothing
     """
-    print(compiled_poses.shape)
-    metadata = 24
-    compiled_poses = scale_to_30fps(compiled_poses, metadata)
+    compiled_poses = scale_to_30fps(compiled_poses, fps)
     
     
     # filter, interpolate, and smooth
@@ -79,7 +77,6 @@ def write_to_video(processed_poses):
     out = cv2.VideoWriter(output_filename, fourcc_format, 30, size)
 
     count = 0
-    print("Creating video")
     for i in range(len(interpolated_canvases)):
         if count == 3000:
             break
@@ -93,15 +90,34 @@ def main(args):
         input_dir = check_input_dir(args.input_dir)
     else: # assuming cwd
         input_dir = check_output_dir(args.input_dir)
-    output_dir = check_output_dir(args.output_dir)
+    # default wil be same as input_dir
+
+    # get frame rate
+    input_path = input_dir.split('/')
+    fps_txt = '/'.join(input_path) + input_path[-2] + "_fps.txt"
+    fps = 30
+    with open(fps_txt, 'r') as f:
+        line = f.readline()
+        fps = int(float(line.split()[0]))
+
+    
+    input_dir = check_output_dir(input_dir + 'data/')
+    
+    if not args.output_dir:
+        output_dir = input_dir
+    else:
+        output_dir = check_output_dir(args.output_dir)
 
     # if specific input file is given, process only that one
     if args.input_file:
         input_filename = args.input_file.split('_')
+        # load using input_dir
         compiled_poses = np.load(input_dir + args.input_file)
-        processed = preprocess_poses(compiled_poses)
+        processed = preprocess_poses(compiled_poses, fps)
         # compiled_{id}_line_{line}.npy
         filename = f"processed_{'_'.join(input_filename[1:])}"
+        # save using output_dir
+        print(f"Saved to {filename}")
         np.save(output_dir + filename, processed)
         print(processed.shape)
     else:
@@ -109,9 +125,13 @@ def main(args):
         import glob
         for input_filename in glob.glob(input_dir + "compiled*.npy"):
             compiled_poses = np.load(input_filename)
-            processed = preprocess_poses(compiled_poses)
+            processed = preprocess_poses(compiled_poses, fps)
             input_filename = input_filename.split('/')[-1].split('_')
-            np.save(output_dir + f"processed_{'_'.join(input_filename[1:])}", processed)
+            output_filename = output_dir + f"processed_{'_'.join(input_filename[1:])}"
+            print(f"Saved to {output_filename}")
+            np.save(output_filename, processed)
+            print(processed.shape)
+
         
     # generate video
     if args.write_video:
@@ -120,7 +140,7 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--input_dir",
-                        help="Path to directory containing relevant npy data",                        
+                        help="Path to directory containing relevant input data",                        
                         default=None,
                         type=str)
 
