@@ -1,55 +1,62 @@
 import torch
 from torch.utils import data
-from classes import AudioToPosesDataset, PosesToPosesDataset
+from classes import AudioToPosesDataset, PosesToPosesDataset, AudioToPosesTwoDataset, AudioToPosesDirDataset
 from model import AudioToJoints
 import torch.nn as nn
+import numpy as np
 
-root_dir = 'data/'
-mfcc_file = root_dir + 'VEE5qqDPVGY_210_9810_mfccs.npy'
-pose_file = root_dir + 'processed_compiled_data_line_0.npy'
-pose_file = None
-
-seq_len = 9
-dataset = AudioToPosesDataset(mfcc_file, pose_file, seq_len)
-
-'''
-print(dataset.hasPoses())
-print('loaded dataset')
-print(dataset.getDataDims())
-print(dataset.getDimsPerBatch())
-'''
-
-params = {'batch_size':128,
-          'shuffle':False,
-          'num_workers': 1
-          }
-
-
-
-generator = data.DataLoader(dataset, **params)
-print(generator.dataset.getDimsPerBatch())
-for epoch in range(1):
-    count = 0
-    
-    for mfccs, poses in generator:
-        print(mfccs.shape, poses.shape, count)
-        count += 1
-
-        # model computations
-
-pose_file = root_dir + 'processed_compiled_data_line_0.npy'
+root_dir = 'data_data/'
 seq_len = 1
-dataset = PosesToPosesDataset(pose_file, seq_len)
+dataset = AudioToPosesDirDataset(root_dir, seq_len)
+
 params = {'batch_size':1,
           'shuffle':False,
           'num_workers': 1
           }
+
+
+big = []
 generator = data.DataLoader(dataset, **params)
-print(generator.dataset.getDimsPerBatch())
 for epoch in range(1):
     count = 0
-    for inputs, outputs in generator:
-        print('='*80)
-        print(inputs[0, 0, :10])
-        print(outputs[0, 0, :10])
+    for mfcc, pose in generator:
+        big.append(pose)
         count += 1
+
+print(f"{count} samples in total")
+
+small = []
+mfcc_file = root_dir + 'mfcc_w5BqAXwflW0_line_0.npy'
+pose_file = root_dir + 'processed_w5BqAXwflW0_line_0.npy'
+dataset = AudioToPosesDataset(mfcc_file, pose_file, seq_len)
+generator = data.DataLoader(dataset, **params)
+for epoch in range(1):
+    count = 0
+    for mfcc, pose in generator:
+        small.append(pose)
+        count += 1
+
+
+print('='*80)
+print("first comparison")
+print(f"{count} samples in small")
+for pose in zip(small, big):
+    print(np.array_equal(pose[0], pose[1]))
+
+
+small = []
+mfcc_file = root_dir + 'mfcc_w5BqAXwflW0_line_1.npy'
+pose_file = root_dir + 'processed_w5BqAXwflW0_line_1.npy'
+dataset = AudioToPosesDataset(mfcc_file, pose_file, seq_len)
+generator = data.DataLoader(dataset, **params)
+for epoch in range(1):
+    count = 0
+    for mfcc, pose in generator:
+        small.append(pose)
+        count += 1
+
+print('='*80)
+print("second comparison")
+print(f"{count} samples in small")
+for pose in zip(small, big[870:]):
+    print(np.array_equal(pose[0], pose[1]))

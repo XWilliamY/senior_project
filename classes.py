@@ -1,8 +1,143 @@
 import torch
+import glob
 import numpy as np
 from torch.utils.data import Dataset, DataLoader
 
+class AudioToPosesDirDataset(Dataset):
+    """ Given a directory, aligns all .npy files """
+    def __init__(self, directory=None, seq_len=1):
 
+        # get names of all processed pose files
+        self.processed_poses_names = glob.glob(directory+'processed*.npy')
+
+        # get names of all associated mfcc files in that order
+        # processed_{video_id}_line_{line}
+        # mfcc_{video_id}_line_{line} correspondingly
+
+        self.mfcc_names = []
+        for name in self.processed_poses_names:
+            pose_name = name.split('_')
+            mfcc_name = directory + f"mfcc_{pose_name[-3]}_line_{pose_name[-1]}"
+            self.mfcc_names.append(mfcc_name)
+
+        print(self.processed_poses_names)
+        print(self.mfcc_names)
+
+        # load poses in memory
+        self.processed_poses = np.array([np.load(name, mmap_mode='r') for name in self.processed_poses_names])
+        self.mfccs = np.array([np.load(name, mmap_mode='r').T for name in self.mfcc_names])
+
+        # get lengths
+        self.poses_lengths = np.array([pose.shape[0] for pose in self.processed_poses])
+        self.mfcc_lengths = np.array([mfcc.shape[0] for mfcc in self.mfccs])
+
+        self.seq_len = seq_len
+        
+        # get total combined dataset len
+        self.dataset_lens = (self.poses_lengths / self.seq_len).astype(int)
+
+        # get max index per dataset
+        self.file_idx_limits = np.cumsum(self.dataset_lens)
+        
+    def __len__(self):
+        return int(np.sum(self.dataset_lens))
+
+    def __getitem__(self, idx):
+
+        file_idx = np.argmax(self.file_idx_limits > idx)
+        target_idx = idx - (self.file_idx_limits[file_idx] - self.dataset_lens[file_idx])
+        # use file_idx and target_idx for both mfccs and pose
+        target_pose = self.processed_poses[file_idx][target_idx * self.seq_len : (target_idx + 1) * self.seq_len]
+
+        mfcc_idx = self.seq_len * 3
+        X = self.mfccs[file_idx][target_idx * mfcc_idx : (target_idx + 1) * mfcc_idx, :]
+        X = X.reshape([self.seq_len, -1])
+        y = target_pose.reshape([self.seq_len, -1])
+
+        X = torch.from_numpy(X)
+        y = torch.from_numpy(y)
+
+        return X, y
+
+
+
+        
+
+
+    
+class AudioToPosesTwoDataset(Dataset):
+    """ Aligns mfcc .npy file to poses .npy file """
+    def __init__(self, mfcc_file=None, pose_file=None):
+        """
+        If given just an mfcc_file, configure data file for testing
+        Otherwise, creates audio_video pairs
+
+        Args:
+             mfcc_file (string): Path to .npy file w/ mfccs
+             pose_file (optional, string): Path to .npy file w/ joint keypoints
+        """
+        self.mfcc_file = mfcc_file
+        self.pose_file = pose_file 
+    
+        self.mfccs = np.load(self.mfcc_file)
+        # transform to total_frames by mfcc_features
+        self.mfccs = self.mfccs.T.astype('float64')
+            
+        if self.pose_file:
+            self.poses = np.load(self.pose_file).astype('float64')
+        else: # create dummy
+            self.poses = np.zeros([int(np.floor(self.mfccs.shape[0] / 3)),
+                                   19,
+                                   2])
+
+    def hasPoses(self):
+        if self.pose_file:
+            return True
+        return False
+    
+    def getDataDims(self):
+        """
+        MFCC dimensions
+        Pose dimensions
+        """
+        return self.mfccs.shape, self.poses.shape
+
+    def getSingleInputFeatureDims(self):
+        return self.mfccs.shape[-1] * 3
+
+    def getSingleOutputFeatureDims(self):
+        return self.poses.shape[1] * self.poses.shape[2]
+    
+    def getDimsPerBatch(self):
+        return self.getSingleInputFeatureDims(), self.getSingleOutputFeatureDims()
+    
+    def __len__(self):
+        """
+        Returns the number of video frames
+        """
+        return len(self.poses)
+
+    def __getitem__(self, idx):
+        """
+        This will batch according to len of dataset 
+        Thus each idx corresponds to one video frame
+
+        Args:
+             idx (int): Assumes video frame
+
+        Returns:
+                X   (array): mfccs of shape [seq_len, mfcc_features]
+                y   (array): keypoints of shape [joints, 2]
+        """
+        # list of indices
+        np_idx = np.arange(idx[0] * 3, (idx[-1]+1) * 3)
+
+        X = self.mfccs[np_idx]
+        X = X.reshape([len(idx), -1])
+        y = self.poses[idx]
+        y = y.reshape([len(idx), -1])
+        return X, y
+    
 class AudioToPosesDataset(Dataset):
     """ Aligns mfcc .npy file to poses .npy file """
     def __init__(self, mfcc_file=None, pose_file=None, seq_len=1):
@@ -28,7 +163,6 @@ class AudioToPosesDataset(Dataset):
             self.poses = np.zeros([int(np.floor(self.mfccs.shape[0] / 3)),
                                    19,
                                    2])
-
 
     def hasPoses(self):
         if self.pose_file:
@@ -66,7 +200,6 @@ class AudioToPosesDataset(Dataset):
                 X   (array): mfccs of shape [seq_len, mfcc_features]
                 y   (array): keypoints of shape [joints, 2]
         """
-
         mfcc_idx = self.seq_len * 3 # 3 mfcc frames per timestep
         X = self.mfccs[idx * mfcc_idx : (idx + 1) * mfcc_idx, :]
         X = X.reshape([self.seq_len, -1])

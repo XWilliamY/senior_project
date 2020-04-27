@@ -40,6 +40,8 @@ def compile_all_poses(input_dir, output_dir, desired_person_at_frame, video_id):
     # iterate through each pose, frame_begin, frame_end tuple
     line = 0
     for target_person_id, frame_begin, frame_end in desired_person_at_frame:
+        print("in compile_json_to_npy")
+        print(frame_begin, frame_end)
         # go through the targeted ones
         for json_file in json_files[frame_begin:frame_end + 1]:
             data = json.load(open(input_dir + json_file))
@@ -58,6 +60,7 @@ def compile_all_poses(input_dir, output_dir, desired_person_at_frame, video_id):
                     all_poses.append(np_keypoints)
         # save the file
         filename = f"{output_dir}compiled_{video_id}_line_{line}.npy"
+        print(f"Compiling {filename}")
         npy_save_file = filename
         np.save(npy_save_file, np.array(all_poses))
         
@@ -75,14 +78,14 @@ def main(args):
         video_id = args.video_id
     else:
         video_id = output_path[-2]
-    frame_rate = 30
+    fps = None
     fps_txt = '/'.join(output_path) + output_path[-2] + "_fps.txt"
     with open(fps_txt, 'r') as f:
         line = f.readline()
         fps = int(float(line.split()[0]))
-    target_frame_rate = 30
+    target_frame_rate = fps
     targets = '/'.join(output_path) + output_path[-2] + "_targets.txt"
-    desired_person_at_frame = read_desired_frames(targets, frame_rate, target_frame_rate)
+    desired_person_at_frame = read_desired_frames(targets, fps, target_frame_rate)
 
     # append '/data/' to output dir
     data_output_dir = check_output_dir(output_dir + 'data/')

@@ -28,6 +28,8 @@ def convert(audio_file, output_dir, targets, video_id):
     # otherwise process targets
     line = 0
     for target_person_id, frame_begin, frame_end in targets:
+        print("in audioToMFCC")
+        print(frame_begin, frame_end)
         collect = []
         video_begin = frame_begin
         video_end = frame_end
@@ -80,7 +82,7 @@ def main(args):
     video_id = input_path[-2]
     fps_txt = '/'.join(input_path) + video_id + "_fps.txt"
     target_frame_rate = 30
-    frame_rate = 30
+    frame_rate = None
     with open(fps_txt, 'r') as f:
         line = f.readline()
         frame_rate = int(float(line.split()[0]))
