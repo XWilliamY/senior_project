@@ -83,6 +83,9 @@ def main(args):
     with open(fps_txt, 'r') as f:
         line = f.readline()
         fps = int(float(line.split()[0]))
+
+    # we want target and fps frame rate to be the same since
+    # the data is not interpolated to 30 fps yet
     target_frame_rate = fps
     targets = '/'.join(output_path) + output_path[-2] + "_targets.txt"
     desired_person_at_frame = read_desired_frames(targets, fps, target_frame_rate)

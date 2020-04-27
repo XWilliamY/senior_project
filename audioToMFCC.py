@@ -3,7 +3,6 @@ import numpy as np
 import argparse
 from data_utils.check_dirs import check_input_dir, check_output_dir
 from data_utils.read_desired_frames import read_desired_frames
-import soundfile as sf
 
 def convert(audio_file, output_dir, targets, video_id):
     """
@@ -14,7 +13,6 @@ def convert(audio_file, output_dir, targets, video_id):
 
     total_samples = x.shape[0]
     samples_per_second = sample_rate
-    frames_per_sec = 24
     hop_length = 490
     mfccs = librosa.feature.mfcc(y=x, sr=sample_rate, n_mfcc=40, hop_length=hop_length)
 
@@ -31,8 +29,6 @@ def convert(audio_file, output_dir, targets, video_id):
         print("in audioToMFCC")
         print(frame_begin, frame_end)
         collect = []
-        video_begin = frame_begin
-        video_end = frame_end
         
         # frame_begin and frame_end adjusted to 30 fps already
         if frame_begin < 0:
