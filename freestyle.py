@@ -127,7 +127,6 @@ class AudioToBodyDynamics(object):
         val_losses = []
         predictions, targets = [], []
 
-        one_epoch_loss = 0
         if not self.is_freestyle_mode: # train
             # for each data point
             count = 0
@@ -141,16 +140,9 @@ class AudioToBodyDynamics(object):
                 self.optim.zero_grad()
                 train_loss.backward()
                 self.optim.step()
-                one_epoch_loss += train_loss.data.tolist()
                 train_loss = train_loss.data.tolist()
-                print(train_loss)
                 train_losses.append(train_loss)
-                count += 1
             # validate
-        print("one epoch is finished")
-        print(f"total loss: {one_epoch_loss}")
-        print(f"{count} number of batches")
-        print(f"average is {one_epoch_loss / count}")
 
         # test or predict / play w/ model
         if self.is_freestyle_mode:
