@@ -1,25 +1,23 @@
 #!/bin/sh
 
-# assuming you are starting from created targets.txt
+# this bash script assumes that you have already:
+# downloaded the folder of openpose json keypoints
+# run pose_to_images to generate images
+# and created targets.txt
 
-# download folders
-# run pose_to_images
+# it assumes the following directory format
+# {video_id}/                                       # from google colab
+#            {video_id}.mp3                         # from google colab
+#            {video_id}_targets.txt                 # manual
+#            {video_id}_fps.txt                     # obtained by running pose_to_image.py
+#            {video_id}_outputs/                    #  name is specified by user, but preferably follow {video_id} convention
 
-# create targets.txt
-
-# assuming {video_id} folder
-# contains {images}, targets.txt, {json_folder}
-
-# compile
+# This script will:
+# compile according to {video_id}_targets.txt
 # preprocess
 # make accompanying audio
 
-# for compile:
-# need the inputs_dir of json
-# also need a dir to save the data to
-
 home=$HOME
-# echo "$home"
 all_project_dir="$home/Desktop/final_project"
 project_dir="$all_project_dir/w5BqAXwflW0"
 
