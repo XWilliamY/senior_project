@@ -3,7 +3,9 @@ import sys
 
 
 def check_input_dir(input_dir):
-    if not (os.path.exists(input_dir) and os.path.isdir(input_dir)):
+    if input_dir is None:
+        return ""
+    elif not (os.path.exists(input_dir) and os.path.isdir(input_dir)):
         print("Invalid input directory, exiting")
         sys.exit(1)
 
@@ -13,8 +15,10 @@ def check_input_dir(input_dir):
     return input_dir
 
 def check_output_dir(output_dir):
+    if output_dir is None:
+        return check_output_dir(os.getcwd())
     # check if output_dir exists
-    if not(os.path.exists(output_dir) and os.path.isdir(output_dir)):
+    elif not(os.path.exists(output_dir) and os.path.isdir(output_dir)):
         os.mkdir(output_dir)
 
     # after directory has been confirmed or created, make sure output_dir has ending slash
