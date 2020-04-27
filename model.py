@@ -50,7 +50,6 @@ class JointsToJoints(nn.Module):
                                        self.options['output_dim'])
 
     def forward(self, inputs):
-        print(inputs.shape)
         # flatten to (batch * seq_len, input dimensions)
         inputs = inputs.reshape(-1, self.options['input_dim'])
 
@@ -93,7 +92,6 @@ class AudioToJointsThree(nn.Module):
                 if 'weight' in param_name:
                     weight = getattr(self.lstm, param_name)
                     init.xavier_normal_(weight.data)
-                    print(weight.data.dtype)
                 else:
                     bias = getattr(self.lstm, param_name)
                     init.uniform_(bias.data, 0.25, 0.5)
@@ -138,7 +136,6 @@ class AudioToJoints(nn.Module):
                 if 'weight' in param_name:
                     weight = getattr(self.lstm, param_name)
                     init.xavier_normal_(weight.data)
-                    print(weight.data.dtype)
                 else:
                     bias = getattr(self.lstm, param_name)
                     init.uniform_(bias.data, 0.25, 0.5)

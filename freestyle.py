@@ -3,7 +3,7 @@ import torch.nn as nn
 from torch import optim
 from torch.autograd import Variable
 from torch.utils import data
-from classes import AudioToPosesDataset, PosesToPosesDataset
+from classes import AudioToPosesDataset, PosesToPosesDataset, AudioToPosesDirDataset
 import matplotlib.pyplot as plt
 import os
 import argparse
@@ -76,8 +76,11 @@ class AudioToBodyDynamics(object):
 
     # loss function
     def buildLoss(self, predictions, targets):
+        print(predictions.shape)
+        print(targets.shape)
         square_diff = (predictions - targets)**2
-        out = torch.sum(square_diff, 1, keepdim=True)
+        out = torch.sum(square_diff, -1, keepdim=True)
+        print(torch.mean(out))
         return torch.mean(out)
 
     def saveModel(self, state_info, path):
@@ -103,29 +106,28 @@ class AudioToBodyDynamics(object):
             return x.cpu().data.numpy()
 
         
-        inputs = Variable(torch.DoubleTensor(inputs).to(self.device))
+        inputs = Variable(torch.DoubleTensor(inputs.double()).to(self.device))
 
         # reshape targets into (batch * seq_len, input features)
         targets = Variable(torch.DoubleTensor(targets).to(self.device))
 
         predictions = self.model.forward(inputs)
-        print("prediction shapes")
 
         # Get loss in MSE of pose coordinates
-        loss = self.buildLoss(predictions, targets)
-        '''
+        # loss = self.buildLoss(predictions, targets)
+
         criterion = nn.L1Loss()
         loss = criterion(predictions, targets)
-        '''
         # # Get loss in pixel space
         return (to_numpy(predictions), to_numpy(targets)), loss
 
     def runEpoch(self):
-        # TODO
+        # given one epoch
         train_losses = [] #coeff_losses
         val_losses = []
         predictions, targets = [], []
 
+        one_epoch_loss = 0
         if not self.is_freestyle_mode: # train
             # for each data point
             count = 0
@@ -134,31 +136,21 @@ class AudioToBodyDynamics(object):
                 # mfccs = mfccs.float()
                 # poses = poses.float()
 
-                # (), loss, pixel_loss
-                # so coeff_loss = train_loss
-                # _,            = ()
                 vis_data, train_loss = self.runNetwork(mfccs, poses,
                                                 validate=False)
-                print("train loss")
                 self.optim.zero_grad()
                 train_loss.backward()
                 self.optim.step()
+                one_epoch_loss += train_loss.data.tolist()
                 train_loss = train_loss.data.tolist()
-                print(train_loss, count)
+                print(train_loss)
                 train_losses.append(train_loss)
-
-                '''
-                print('='*80)
-                print("in runEpoch")
-                print('^the predicted')
-                print(vis_data[0][0])
-                print(vis_data[0][0].dtype)
-                print('^^the actual')
-                print(vis_data[1][0])
-                print(vis_data[1][0].dtype)
-                '''
                 count += 1
             # validate
+        print("one epoch is finished")
+        print(f"total loss: {one_epoch_loss}")
+        print(f"{count} number of batches")
+        print(f"average is {one_epoch_loss / count}")
 
         # test or predict / play w/ model
         if self.is_freestyle_mode:
@@ -213,7 +205,7 @@ class AudioToBodyDynamics(object):
             # train_info, val_info, predictions, targets
             iter_train, iter_val, predictions, targets = self.runEpoch()
 
-            iter_mean = np.mean(iter_train[0]), np.mean(iter_train[1])
+            iter_mean = np.mean(iter_train)
             # iter_val_mean = np.mean(iter_val[0]), np.mean(iter_val[1])
 
             epoch_losses.append(iter_mean)
@@ -400,13 +392,13 @@ def main():
             else:
                 print("Missing audio file")
         else:
-            mfcc_file = root_dir + 'VEE5qqDPVGY_210_9810_mfccs.npy'
-            pose_file = root_dir + 'processed_compiled_data_line_0.npy'
+            mfcc_file = root_dir + 'mfcc_VEE5qqDPVGY_line_0.npy'
+            pose_file = root_dir + 'processed_VEE5qqDPVGY_line_0.npy'
 
             print(mfcc_file)
             print(pose_file)
 
-        dataset = AudioToPosesDataset(mfcc_file, pose_file, seq_len)
+        dataset = AudioToPosesDirDataset(root_dir, seq_len)
 
     params = {'batch_size':args.batch_size,
               'shuffle':False,
