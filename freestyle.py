@@ -76,6 +76,7 @@ class AudioToBodyDynamics(object):
         # Load checkpoint model
         if self.is_freestyle_mode:
             path = "saved_models/" + args.model_name + str(args.ident) + '.pth'
+            print(path)
             self.loadModelCheckpoint(path)
 
     # loss function
@@ -91,7 +92,8 @@ class AudioToBodyDynamics(object):
         torch.save(state_info, path)
 
     def loadModelCheckpoint(self, path):
-        checkpoint = torch.load(path)
+
+        checkpoint = torch.load(path, map_location=self.device)
         self.model.load_state_dict(checkpoint['model_state_dict'])
         self.optim.load_state_dict(checkpoint['optim_state_dict'])
 
@@ -381,7 +383,7 @@ def main():
             if args.audio_file:
                 # convert audio to mfcc
                 from audioToMFCC import convert
-                output_file_path = convert(args.audio_file, "", None)
+                output_file_path = convert(args.audio_file, "", None, 0)
                 print(output_file_path)
                 # get audio
                 mfcc_file = output_file_path
@@ -428,7 +430,7 @@ def main():
         # save the predictions
         best_losses = [iter_train]
         np_preds = np.vstack(preds)
-        np.save("dior.npy", np_preds)
+        np.save("gang.npy", np_preds)
 
     log.info("The best validation is : {}".format(best_losses))
 

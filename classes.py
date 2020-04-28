@@ -48,7 +48,7 @@ class AudioToPosesDirDataset(Dataset):
         target_pose = self.processed_poses[file_idx][target_idx * self.seq_len : (target_idx + 1) * self.seq_len]
 
         mfcc_idx = self.seq_len * 3
-        X = self.mfccs[file_idx][target_idx * mfcc_idx : (target_idx + 1) * mfcc_idx, :]
+        X = self.mfccs[file_idx][target_idx * mfcc_idx : (target_idx + 1) * mfcc_idx, :13]
         X = X.reshape([self.seq_len, -1])
         y = target_pose.reshape([self.seq_len, -1])
 

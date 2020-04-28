@@ -1,11 +1,22 @@
 import numpy as np
 import cv2
+import argparse
 from joints import joint_to_limb_heatmap_relationship, colors, imshow, label_canvas, add_pose_to_canvas, draw_pose_figure
+from check_dirs import check_input_dir, check_output_dir
 
-def np_to_video(processed_poses, filename):
-    chunked = filename.split('/')
-    # output_filename = '/'.join(chunked[:-2]) + '/videos/' + chunked[-1][:-4] + '_last.mp4'
-    output_filename = "dior.mp4"
+
+def np_to_image(processed_poses, output_dir):
+    count = 0
+    shift_by = np.array([750, 800]) - processed_poses[0][8]
+    processed_poses += shift_by
+    for pose in processed_poses:
+        person_id = str(0) + ", " + str([0])
+        canvas = draw_pose_figure(person_id, pose)
+        file_name = output_dir + f"{count:05}.jpg"
+        cv2.imwrite(file_name, canvas)
+        count += 1
+    
+def np_to_video(processed_poses, output_dir):
     print(output_filename)
 
     interpolated_canvases = []
@@ -39,4 +50,20 @@ def file_to_video(filename):
     poses = np.load(filename)
     np_to_video(poses, filename)
 
-file_to_video('/Users/will.i.liam/Desktop/final_project/senior_project/dior.npy')
+def main(args):
+    input_file = args.input_file
+
+    processed_poses = np.load(input_file)
+    output_dir = check_output_dir(args.output_dir)
+    
+    np_to_image(processed_poses, output_dir)
+    
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--input_file', type=str,
+                        help="path to npy")
+    parser.add_argument('--output_dir', type=str,
+                        help="path to images")
+    args = parser.parse_args()
+    main(args)
+    

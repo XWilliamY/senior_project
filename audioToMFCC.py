@@ -16,13 +16,11 @@ def convert(audio_file, output_dir, targets, video_id):
     hop_length = 490
     mfccs = librosa.feature.mfcc(y=x, sr=sample_rate, n_mfcc=40, hop_length=hop_length)
 
-    '''
-    save_to = output_dir + audio_file.split('/')[-1][:-4] + "_all_mfccs.npy"
-    np.save(save_to, mfccs)
     if targets == None:
-        # full beginning to ending frame already generated (mfccs)
+        save_to = output_dir + audio_file.split('/')[-1][:-4] + "_all_mfccs.npy"
+        np.save(save_to, mfccs)
         return save_to
-    '''
+
     # otherwise process targets
     line = 0
     for target_person_id, frame_begin, frame_end in targets:
