@@ -4,63 +4,85 @@ import numpy as np
 from torch.utils.data import Dataset, DataLoader
 
 class AudioToPosesDirDataset(Dataset):
-    """ Given a directory, aligns all .npy files """
-    def __init__(self, directory=None, seq_len=1):
+    """
+    Given a directory, AudioToPosesDirDataset will align all matching names of mfcc files to pose files.
+    If pose2pose is given, we ignore audio files and create a dataset for autoencoders.
+    If nextpose is given, we instead create training and target data from pose files, offset by one for pose generation
+    """
+    def __init__(self, directory=None, seq_len=1, pose2pose=False, nextpose=False):
 
+        # handle all pose files first:
         # get names of all processed pose files
         self.processed_poses_names = glob.glob(directory+'processed*.npy')
 
-        # get names of all associated mfcc files in that order
-        # processed_{video_id}_line_{line}
-        # mfcc_{video_id}_line_{line} correspondingly
-
-        self.mfcc_names = []
-        for name in self.processed_poses_names:
-            pose_name = name.split('_')
-            mfcc_name = directory + f"mfcc_{pose_name[-3]}_line_{pose_name[-1]}"
-            self.mfcc_names.append(mfcc_name)
-
-
         # load poses in memory
         self.processed_poses = np.array([np.load(name, mmap_mode='r') for name in self.processed_poses_names])
-        self.mfccs = np.array([np.load(name, mmap_mode='r').T[:, :13] for name in self.mfcc_names])
 
-        # get lengths
+        # get pose frame lengths
         self.poses_lengths = np.array([pose.shape[0] for pose in self.processed_poses])
-        self.mfcc_lengths = np.array([mfcc.shape[0] for mfcc in self.mfccs])
 
-        self.seq_len = seq_len
-        
         # get total combined dataset len
+        self.seq_len = seq_len
         self.dataset_lens = (self.poses_lengths / self.seq_len).astype(int)
 
         # get max index per dataset
         self.file_idx_limits = np.cumsum(self.dataset_lens)
+
+        # handle inputs
+        # if mfcc:
+        # get names of all associated mfcc files in that order
+        # processed_{video_id}_line_{line}
+        # mfcc_{video_id}_line_{line} correspondingly
+        self.pose2pose = pose2pose
+        self.nextpose = nextpose
+        self.audio2pose = not self.pose2pose and not self.nextpose
+
+        if self.audio2pose:
+            self.mfcc_names = []
+            for name in self.processed_poses_names:
+                pose_name = name.split('_')
+                mfcc_name = directory + f"mfcc_{pose_name[-3]}_line_{pose_name[-1]}"
+                self.mfcc_names.append(mfcc_name)
+
+            self.mfccs = np.array([np.load(name, mmap_mode='r').T for name in self.mfcc_names])
+            self.mfcc_lengths = np.array([mfcc.shape[0] for mfcc in self.mfccs])
+
+        # only need to modify data for nextpose=True or both pose2pose and nextpose=False
+
         
     def __len__(self):
         return int(np.sum(self.dataset_lens))
 
     def __getitem__(self, idx):
 
+        # handle targets first
         file_idx = np.argmax(self.file_idx_limits > idx)
         target_idx = idx - (self.file_idx_limits[file_idx] - self.dataset_lens[file_idx])
         # use file_idx and target_idx for both mfccs and pose
         target_pose = self.processed_poses[file_idx][target_idx * self.seq_len : (target_idx + 1) * self.seq_len]
-
-        mfcc_idx = self.seq_len * 3
-        X = self.mfccs[file_idx][target_idx * mfcc_idx : (target_idx + 1) * mfcc_idx]
-        X = X.reshape([self.seq_len, -1])
         y = target_pose.reshape([self.seq_len, -1])
-
-        X = torch.from_numpy(X)
         y = torch.from_numpy(y)
+        
+        # handle source
+        if self.audio2pose:
+            mfcc_idx = self.seq_len * 3
+            X = self.mfccs[file_idx][target_idx * mfcc_idx : (target_idx + 1) * mfcc_idx]
+            X = X.reshape([self.seq_len, -1])
+            X = torch.from_numpy(X)
+
+        elif self.pose2pose:
+            return y, y
+
         return X, y
     
     def getSingleInputFeatureDims(self):
-        return self.mfccs[0][-1].shape[0] * 3
+        if self.audio2pose:
+            return self.mfccs[0][-1].shape[0] * 3
+        if self.pose2pose or self.nextpose:
+            return self.getSingleOutputFeatureDims()
         
     def getSingleOutputFeatureDims(self):
-        return 38
+        return self.processed_poses[0][-1].shape[0] * 2
     
     def getDimsPerBatch(self):
         return self.getSingleInputFeatureDims(), self.getSingleOutputFeatureDims()
