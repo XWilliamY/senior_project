@@ -166,8 +166,8 @@ class AudioToJointsSeq2Seq(nn.Module):
         self.options = options
 
         # encoder 
-        self.encoder = Encoder(self.options)
-        self.decoder = Decoder(self.options)
+        self.encoder = Encoder(self.options).double()
+        self.decoder = Decoder(self.options).double()
 
         # decoder
 

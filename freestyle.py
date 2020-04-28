@@ -130,7 +130,10 @@ class AudioToBodyDynamics(object):
         # loss = self.buildLoss(predictions, targets)
 
         criterion = nn.L1Loss()
-        loss = criterion(predictions, targets)
+        if self.model_name == 'AudioToJointsSeq2Seq':
+            loss = criterion(predictions.to(self.device), targets.to(self.device).float())
+        else:
+            loss = criterion(predictions, targets)
         # # Get loss in pixel space
         return (to_numpy(predictions), to_numpy(targets)), loss
 
@@ -342,7 +345,7 @@ def createOptions():
                         help="Visualize the output of the model. Use only in Test")
     parser.add_argument("--save_predictions", type=bool, default=True,
                         help="Whether or not to save predictions. Use only in Test")
-    parser.add_argument("--device", type=str, default="cpu",
+    parser.add_argument("--device", type=str, default="gpu",
                         help="Device to train on. Use 'cpu' if to train on cpu.")
     parser.add_argument("--max_epochs", type=int, default=10,
                         help="max number of epochs to run for")
