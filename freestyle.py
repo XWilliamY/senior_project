@@ -43,6 +43,7 @@ class AudioToBodyDynamics(object):
         self.generator = generator
         self.model_name = args.model_name
         self.ident = args.ident
+        self.model_name = args.model_name
 
         input_dim, output_dim = generator.dataset.getDimsPerBatch()
         model_options = {
@@ -68,6 +69,9 @@ class AudioToBodyDynamics(object):
         elif args.model_name == 'LSTMToDense':
             from model import LSTMToDense
             self.model = LSTMToDense(model_options).cuda(args.device).double()
+        elif args.model_name == 'AudioToJointsSeq2Seq':
+            from model import AudioToJointsSeq2Seq
+            self.model = AudioToJointsSeq2Seq(model_options).cuda(args.device).double()
             
 
         # construct the model
@@ -117,7 +121,10 @@ class AudioToBodyDynamics(object):
         # reshape targets into (batch * seq_len, input features)
         targets = Variable(torch.DoubleTensor(targets).to(self.device))
 
-        predictions = self.model.forward(inputs)
+        if self.model_name == 'AudioToJointsSeq2Seq':
+            predictions = self.model.forward(inputs, targets)
+        else:
+            predictions = self.model.forward(inputs)
 
         # Get loss in MSE of pose coordinates
         # loss = self.buildLoss(predictions, targets)
@@ -430,7 +437,7 @@ def main():
         # save the predictions
         best_losses = [iter_train]
         np_preds = np.vstack(preds)
-        np.save("gang.npy", np_preds)
+        np.save("pose_gang.npy", np_preds)
 
     log.info("The best validation is : {}".format(best_losses))
 

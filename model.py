@@ -13,6 +13,8 @@ import torch
 import torch.nn as nn
 import torch.nn.init as init
 from torch.autograd import Variable
+import numpy as np
+
 
 class Residual(nn.Module):
     def __init__(self, linear_hidden = 1024, time = 1024):
@@ -156,3 +158,79 @@ class AudioToJoints(nn.Module):
                                           self.options['seq_len'],
                                           self.options['output_dim'])
         return predictions
+
+
+class AudioToJointsSeq2Seq(nn.Module):
+    def __init__(self, options):
+        super(AudioToJointsSeq2Seq, self).__init__()
+        self.options = options
+
+        # encoder 
+        self.encoder = Encoder(self.options)
+        self.decoder = Decoder(self.options)
+
+        # decoder
+
+    def forward(self, inputs, targets, teacher_forcing_ratio=0.5):
+        # inputs:  [batch, seq_len, mfcc_features]
+        # targets: [batch, seq_len, pose_features]
+        batch_size = targets.shape[0]
+        max_len = targets.shape[1]
+        output_dim = self.options['output_dim']
+        # container for decoder outputs
+        outputs = torch.zeros(batch_size, max_len, output_dim)
+
+        input, hidden_encode, cell_encode = self.encoder(inputs)
+        
+        for frame in range(1, max_len):
+            output, hidden_decode, cell_decode = self.decoder(input, hidden_encode, cell_encode)
+            outputs[:, frame, :] = output
+            use_teacher_force = np.random.random() < teacher_forcing_ratio
+            input = (targets[:, frame, :] if use_teacher_force else output)
+        
+        return outputs
+
+class Encoder(nn.Module):
+    def __init__(self, options):
+        super(Encoder, self).__init__()
+        self.options = options
+
+        self.lstm = nn.LSTM(self.options['input_dim'],
+                            self.options['hidden_dim'],
+                            batch_first=True)
+        self.linear_encode = nn.Linear(self.options['hidden_dim'],
+                                       self.options['output_dim'])
+
+    def forward(self, inputs):
+        outputs, (hidden, cell) = self.lstm(inputs)
+
+        output = outputs.reshape(-1, self.options['hidden_dim'])
+        predictions = self.linear_encode(output)
+        predictions = predictions.reshape(-1,
+                                          self.options['seq_len'],
+                                          self.options['output_dim'])
+        predictions = predictions[:, 0, :]
+        return predictions, hidden, cell
+
+class Decoder(nn.Module):
+    def __init__(self, options):
+        super(Decoder, self).__init__()
+        self.options = options
+
+        self.lstm = nn.LSTM(self.options['output_dim'],
+                            self.options['hidden_dim'],
+                            batch_first=True)
+        self.linear_decode = nn.Linear(self.options['hidden_dim'],
+                                       self.options['output_dim'])
+        self.dropout = nn.Dropout(self.options['dropout'])
+
+    def forward(self, inputs, hidden, cell):
+        # make 3 dimensional
+        inputs = inputs.unsqueeze(1)
+        output, (hidden, cell) = self.lstm(inputs, (hidden, cell))
+        predicted = self.linear_decode(output)
+        predicted = predicted.reshape(-1, self.options['output_dim'])
+
+        return predicted, hidden, cell
+
+        
