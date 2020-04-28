@@ -23,7 +23,7 @@ class AudioToPosesDirDataset(Dataset):
 
         # load poses in memory
         self.processed_poses = np.array([np.load(name, mmap_mode='r') for name in self.processed_poses_names])
-        self.mfccs = np.array([np.load(name, mmap_mode='r').T for name in self.mfcc_names])
+        self.mfccs = np.array([np.load(name, mmap_mode='r').T[:, :13] for name in self.mfcc_names])
 
         # get lengths
         self.poses_lengths = np.array([pose.shape[0] for pose in self.processed_poses])
@@ -48,8 +48,9 @@ class AudioToPosesDirDataset(Dataset):
         target_pose = self.processed_poses[file_idx][target_idx * self.seq_len : (target_idx + 1) * self.seq_len]
 
         mfcc_idx = self.seq_len * 3
-        X = self.mfccs[file_idx][target_idx * mfcc_idx : (target_idx + 1) * mfcc_idx, :13]
+        X = self.mfccs[file_idx][target_idx * mfcc_idx : (target_idx + 1) * mfcc_idx]
         X = X.reshape([self.seq_len, -1])
+        print(X.shape)
         y = target_pose.reshape([self.seq_len, -1])
 
         X = torch.from_numpy(X)
@@ -58,7 +59,7 @@ class AudioToPosesDirDataset(Dataset):
     
     def getSingleInputFeatureDims(self):
         return self.mfccs[0][-1].shape[0] * 3
-
+        
     def getSingleOutputFeatureDims(self):
         return 38
     
