@@ -159,6 +159,56 @@ class AudioToJoints(nn.Module):
                                           self.options['output_dim'])
         return predictions
 
+class AudioToJointsNonlinear(nn.Module):
+
+    def __init__(self, options):
+        super(AudioToJointsNonlinear, self).__init__()
+
+        # Instantiating the model
+        self.init = None
+        self.options = options
+
+        # specify input features and hidden_dim
+        self.lstm = nn.LSTM(self.options['input_dim'],
+                            self.options['hidden_dim'],
+                            batch_first=True).double()
+        self.dropout = nn.Dropout(self.options['dropout']).double()
+        self.linear_one = nn.Linear(self.options['hidden_dim'], int(self.options['hidden_dim']/2))
+        self.relu = nn.ReLU()
+        self.fc = nn.Linear(int(self.options['hidden_dim']/2), self.options['output_dim']).double()
+        self.initialize()
+
+    def initialize(self):
+        # Initialize LSTM Weights and Biases
+        for layer in self.lstm._all_weights:
+            for param_name in layer:
+                if 'weight' in param_name:
+                    weight = getattr(self.lstm, param_name)
+                    init.xavier_normal_(weight.data)
+                else:
+                    bias = getattr(self.lstm, param_name)
+                    init.uniform_(bias.data, 0.25, 0.5)
+
+        # Initialize FC
+        init.xavier_normal_(self.fc.weight.data)
+        init.constant_(self.fc.bias.data, 0)
+
+    def forward(self, inputs):
+        # perform the Forward pass of the model
+        output, (h_n, c_n) = self.lstm(inputs, self.init)
+        # inputs.to(float)
+        # output = output.view(-1, output.size()[-1])  # flatten before FC
+        output = output.reshape(-1, self.options['hidden_dim'])
+        dped_output = self.dropout(output)
+
+        output = self.linear_one(dped_output)
+        output = self.relu(output)
+        predictions = self.fc(output)
+        predictions = predictions.reshape(-1,
+                                          self.options['seq_len'],
+                                          self.options['output_dim'])
+        return predictions
+
 
 class AudioToJointsSeq2Seq(nn.Module):
     def __init__(self, options):

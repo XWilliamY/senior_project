@@ -60,6 +60,9 @@ class AudioToBodyDynamics(object):
         if args.model_name == "AudioToJointsThree":
             from model import AudioToJointsThree
             self.model = AudioToJointsThree(model_options).cuda(args.device)
+        elif args.model_name == 'AudioToJointsNonlinear':
+            from model import AudioToJointsNonlinear
+            self.model = AudioToJointsNonlinear(model_options).cuda(args.device)
         elif args.model_name == "AudioToJoints":
             from model import AudioToJoints
             self.model = AudioToJoints(model_options).cuda(args.device)
