@@ -303,6 +303,7 @@ def createOptions():
     parser = argparse.ArgumentParser(
         description="Pytorch: Audio To Body Dynamics Model"
     )
+    parser.add_argument('--dataset_size', type=str)
     parser.add_argument('--p2p', type=bool, default=False)
     parser.add_argument('--model_name', type=str, default="AudioToJoints")
     # parser.add_argument("--data", type=str, default="piano_data.json",
@@ -390,7 +391,10 @@ def main():
             print(mfcc_file)
             print(pose_file)
 
-        dataset = AudioToPosesDirDataset(root_dir, seq_len)
+        if args.dataset_size == 'big':
+            dataset = AudioToPosesDirDataset(root_dir, seq_len)
+        else:
+            dataset = AudioToPosesDataset(mfcc_file, pose_file, seq_len)
 
     params = {'batch_size':args.batch_size,
               'shuffle':False,
