@@ -65,6 +65,9 @@ class AudioToBodyDynamics(object):
         elif args.model_name == 'JointsToJoints':
             from model import JointsToJoints
             self.model = JointsToJoints(model_options).cuda(args.device).double()
+        elif args.model_name == 'LSTMToDense':
+            from model import LSTMToDense
+            self.model = LSTMToDense(model_options).cuda(args.device).double()
             
 
         # construct the model
@@ -72,7 +75,8 @@ class AudioToBodyDynamics(object):
 
         # Load checkpoint model
         if self.is_freestyle_mode:
-            self.loadModelCheckpoint(args.test_model)
+            path = "saved_models/" + args.model_name + str(args.ident) + '.pth'
+            self.loadModelCheckpoint(path)
 
     # loss function
     def buildLoss(self, predictions, targets):
@@ -250,7 +254,7 @@ class AudioToBodyDynamics(object):
 
         # self.plotResults(logfldr, epoch_losses, batch_losses, val_losses)
         # return best_train_loss, best_val_loss
-        path = "saved_models" + self.model_name + str(self.ident) + ".pth"
+        path = "saved_models/" + self.model_name + str(self.ident) + ".pth"
         self.saveModel(state_info, path)
         return best_train_loss
 
