@@ -31,7 +31,7 @@ class Residual(nn.Module):
     def forward(self, inputs):
         output = self.layer(inputs)
         return output
-        
+
 class JointsToJoints(nn.Module):
     def __init__(self, options):
         super(JointsToJoints, self).__init__()
@@ -74,7 +74,7 @@ class JointsToJoints(nn.Module):
         return predictions
 
 
-        
+
 class AudioToJointsThree(nn.Module):
     def __init__(self, options):
         super(AudioToJointsThree, self).__init__()
@@ -125,7 +125,7 @@ class MDNRNN(nn.Module):
         self.lstm = nn.LSTM(self.options['input_dim'],
                             self.options['hidden_dim'],
                             batch_first=True).double()
-        
+
         self.pi = nn.Sequential(
             nn.Linear(self.options['hidden_dim'], self.options['output_dim'] * n_gaussians),
             nn.Softmax(dim=2)
@@ -160,8 +160,8 @@ class MDNRNN(nn.Module):
         """
         categorical = Categorical(pi)
         pis = list(categorical.sample().data)
-        sample = Variable(
-        
+        sample = Variable()
+
 
 class AudioToJoints(nn.Module):
 
@@ -265,7 +265,7 @@ class AudioToJointsSeq2Seq(nn.Module):
         super(AudioToJointsSeq2Seq, self).__init__()
         self.options = options
 
-        # encoder 
+        # encoder
         self.encoder = Encoder(self.options).double()
         self.decoder = Decoder(self.options).double()
 
@@ -281,13 +281,13 @@ class AudioToJointsSeq2Seq(nn.Module):
         outputs = torch.zeros(batch_size, max_len, output_dim)
 
         input, hidden_encode, cell_encode = self.encoder(inputs)
-        
+
         for frame in range(1, max_len):
             output, hidden_decode, cell_decode = self.decoder(input, hidden_encode, cell_encode)
             outputs[:, frame, :] = output
             use_teacher_force = np.random.random() < teacher_forcing_ratio
             input = (targets[:, frame, :] if use_teacher_force else output)
-        
+
         return outputs
 
 class Encoder(nn.Module):
@@ -333,4 +333,30 @@ class Decoder(nn.Module):
 
         return predicted, hidden, cell
 
-        
+class VAE(nn.Module):
+    def __init__(self, options):
+        super(VAE, self).__init__()
+        self.options = options
+        self.fc1 = nn.Conv1d(38, 10)
+        self.fc21 = nn.Conv1d(10, 2)
+        self.fc22 = nn.Conv1d(10, 2)
+        self.fc3 = nn.Linear(2, 10)
+        self.fc4 = nn.Linear(10, 38)
+
+    def encode(self, x):
+        h1 = nn.functional.relu(self.fc1(x))
+        return self.fc21(h1), self.fc22(h1)
+
+    def reparameterize(self, mu, logvar):
+        std = torch.exp(0.5*logvar)
+        eps = torch.randn_like(std)
+        return mu + eps*std
+
+    def decode(self, z):
+        h3 = nn.functional.relu(self.fc3(z))
+        return torch.sigmoid(self.fc4(h3))
+
+    def forward(self, x):
+        mu, logvar = self.encode(x.view(-1, 784))
+        z = self.reparameterize(mu, logvar)
+        return self.decode(z), mu, logvar

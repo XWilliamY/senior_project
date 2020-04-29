@@ -26,7 +26,7 @@ np.random.seed(1234)
 
 class AudioToBodyDynamics(object):
     """
-    Defines a wrapper class for training and evaluating a model. 
+    Defines a wrapper class for training and evaluating a model.
     Inputs:
            args    (argparse object):      model settings
            dataset (pytorch Dataloader):   DataLoader wrapper around Dataset
@@ -79,7 +79,10 @@ class AudioToBodyDynamics(object):
         elif args.model_name == 'MDNRNN':
             from model import MDNRNN
             self.model = MDNRNN(model_options).cuda(args.device).double()
-            
+        elif args.model_name == 'VAE':
+            from model import VAE
+            self.model = VAE(model_options).cuda(args.device).double()
+
 
         # construct the model
         self.optim = optim.Adam(self.model.parameters(), lr=args.lr)
@@ -130,7 +133,7 @@ class AudioToBodyDynamics(object):
             # import from gpu device to cpu, convert to numpy
             return x.cpu().data.numpy()
 
-        
+
         inputs = Variable(torch.DoubleTensor(inputs.double()).to(self.device))
 
         # reshape targets into (batch * seq_len, input features)
@@ -194,7 +197,7 @@ class AudioToBodyDynamics(object):
                                            2)
                 predictions.append(pred)
                 targets.append(vis_data[1])
-            
+
         return train_losses, val_losses, predictions, targets
 
     def trainModel(self, max_epochs, logfldr, patience):
@@ -341,8 +344,7 @@ def createOptions():
     parser.add_argument('--dataset_size', type=str)
     parser.add_argument('--p2p', type=bool, default=False)
     parser.add_argument('--model_name', type=str, default="AudioToJoints")
-    # parser.add_argument("--data", type=str, default="piano_data.json",
-    #                     help="Path to data file")
+    parser.add_argument('--autoencode', type=bool, default=False)
 
     # dior_pop_smoke.mp3',
     parser.add_argument("--audio_file", type=str, default='/Users/will.i.liam/Desktop/final_project/VEE5qqDPVGY/audio/dior_pop_smoke.mp3',
@@ -426,7 +428,9 @@ def main():
             print(mfcc_file)
             print(pose_file)
 
-        if args.dataset_size == 'big':
+        if args.autoencode:
+            dataset = AudioToPosesDirDataset(directory=root_dir, seq_len=seq_len, pose2pose=True)
+        elif args.dataset_size == 'big'
             dataset = AudioToPosesDirDataset(root_dir, seq_len)
         else:
             dataset = AudioToPosesDataset(mfcc_file, pose_file, seq_len)
@@ -438,13 +442,9 @@ def main():
     generator = data.DataLoader(dataset, **params)
 
     # Create model
-    dynamics_learner = AudioToBodyDynamics(args, 
+    dynamics_learner = AudioToBodyDynamics(args,
                                            generator,
                                            freestyle=args.freestyle)
-
-    # logfldr = args.logfldr
-    # if not os.path.isdir(logfldr):
-    #     os.makedirs(logfldr)
 
     # Train model
     if not args.freestyle:
