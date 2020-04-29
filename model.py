@@ -114,7 +114,7 @@ class AudioToJointsThree(nn.Module):
         return predictions
 
 class MDNRNN(nn.Module):
-    def __init__(self, options, n_hidden=256, n_gaussians=5, n_layers=1):
+    def __init__(self, options, n_hidden=256, n_gaussians=10, n_layers=1):
         super(MDNRNN, self).__init__()
         self.options = options
 
@@ -127,7 +127,7 @@ class MDNRNN(nn.Module):
                             batch_first=True).double()
         
         self.pi = nn.Sequential(
-            nn.Linear(self.options['hidden_dim'], self.options['output_dim'] * n_gaussians),
+            nn.Linear(self.options['hidden_dim'], n_gaussians),
             nn.Softmax(dim=2)
             ).double()
 
@@ -138,9 +138,10 @@ class MDNRNN(nn.Module):
         rollout_length = inputs.size(1) # sequence_length
 
         # use the linear layers as approximators for different Gaussian stuff
-        pi, mu, sigma = self.pi(inputs), self.sigma(inputs), self.mu(inputs)
+        pi = self.pi(inputs)
+        mu = self.mu(inputs)
+        sigma = self.sigma(inputs)
 
-        pi = pi.view(-1, rollout_length, self.n_gaussians, self.options['output_dim'])
         mu = mu.view(-1, rollout_length, self.n_gaussians, self.options['output_dim'])
         sigma = sigma.view(-1, rollout_length, self.n_gaussians, self.options['output_dim'])
 
@@ -150,9 +151,9 @@ class MDNRNN(nn.Module):
     def forward(self, inputs):
         y, (h, c) = self.lstm(inputs)
         pi, mu, sigma = self.get_mixture_coef(y)
-        return (pi, mu, sigma), (h, c)
+        return (pi, mu, sigma)# , self.sample(pi, sigma, mu)
 
-    def sample(pi, sigma, mu):
+    def sample(self, pi, sigma, mu):
         """
         pi is multinomial distribution of Gaussians
         sigma is std dev of each gaussian
@@ -160,7 +161,63 @@ class MDNRNN(nn.Module):
         """
         categorical = Categorical(pi)
         pis = list(categorical.sample().data)
-        sample = Variable(
+        sample = Variable(sigma.data.new(sigma.size(0), sigma.size(1), sigma.size(3)).normal_())
+        for i, idx in enumerate(pis):
+
+            '''
+            for j in self.seq_len:
+            print("looking at each idx of pis")
+            print(i, idx.shape) # idx per timestep of sequence
+            print(idx) # each idx is the one to pick out
+            print(sample[i].shape)
+            '''
+
+            # sample[i] = sample[i].mul(sigma[i,idx]).add(mu[i,idx])
+
+        y_preds = [torch.normal(mu, sigma)[:, :, i, :] for i in range(self.n_gaussians)]
+        print('+'*80)
+        print("ypreds[0]")
+        print(y_preds[0].shape)
+        print(len(y_preds))
+
+        print(sample.shape)
+        normed = torch.normal(mu, sigma)
+        print(normed.shape)
+        
+        '''
+        print(pi.shape)
+        N, _, _, K = pi.shape
+        _, _, _, KT = mu.shape
+        T  = int(KT / K)
+        print(T)
+        out = Variable(torch.zeros(N, self.seq_len, self.output_dim))
+        print(out.shape)
+
+
+        print(z_next_pred[0].shape)
+        print("pi shape")
+        print(pi.shape)
+        categorical = Categorical(pi)
+        pis = list(categorical.sample().data) # ten for batch_size
+        print(len(pis))
+        sample = Variable(sigma.data.new(sigma.size(0), sigma.size(3)).normal_())
+        print("sample")
+        print(sample.shape)
+        for i, idx in enumerate(pis):
+            # for each sample in batch
+
+            print("sigma stuff")
+            print(i)
+            print(idx)
+            print(sigma.shape)
+            print(mu.shape)
+
+            print(sigma[i, :, :, idx].shape)
+            print(mu[i, :, :, idx])
+            print(sample[i, :].shape)
+            sample[i, :] = sample[i, :].mul(sigma[i, :, :, idx]).add(mu[i, :, :, idx])
+        '''
+        return sample
         
 
 class AudioToJoints(nn.Module):

@@ -92,20 +92,20 @@ class AudioToBodyDynamics(object):
 
     # loss function
     def buildLoss(self, predictions, targets):
-        print(predictions.shape)
-        print(targets.shape)
         square_diff = (predictions - targets)**2
         out = torch.sum(square_diff, -1, keepdim=True)
-        print(torch.mean(out))
         return torch.mean(out)
 
     def mdn_loss(self, y, pi, mu, sigma):
-
+        
+        # mu mean
+        # sigma std-dev
         m = torch.distributions.Normal(loc=mu, scale=sigma)
-        loss = torch.exp(m.log_prob(y))
-        loss = torch.sum(loss * pi, dim=2)
-        loss = -torch.log(loss)
-        return torch.mean(loss)
+        loglik = m.log_prob(y.unsqueeze(2).expand_as(m.loc))
+        loglik = torch.sum(loglik, dim=3)
+        loss = torch.logsumexp(torch.log(pi) + loglik, dim=2)
+        # should be batch
+        return -torch.mean(loss)
 
     def saveModel(self, state_info, path):
         torch.save(state_info, path)
@@ -149,11 +149,11 @@ class AudioToBodyDynamics(object):
             loss = criterion(predictions.to(self.device), targets.to(self.device).float())
         elif self.model_name == 'MDNRNN':
             # predictions = (pi, mu, sigma), (h, c)
-            loss = self.mdn_loss(targets, predictions[0][0], predictions[0][1], predictions[0][2])
+            loss = self.mdn_loss(targets, predictions[0], predictions[1], predictions[2])
         else:
             loss = criterion(predictions, targets)
         # # Get loss in pixel space
-        return (to_numpy(predictions), to_numpy(targets)), loss
+        return (to_numpy(torch.DoubleTensor([1])), to_numpy(targets)), loss
 
     def runEpoch(self):
         # given one epoch
