@@ -9,18 +9,22 @@ class AudioToPosesDirDataset(Dataset):
     If pose2pose is given, we ignore audio files and create a dataset for autoencoders.
     If nextpose is given, we instead create training and target data from pose files, offset by one for pose generation
     """
-    def __init__(self, directory=None, seq_len=1, pose2pose=False, nextpose=False):
+    def __init__(self, directory=None, seq_len=1, pose2pose=False, nextpose=False, start=0, end=1):
 
         # handle all pose files first:
         # get names of all processed pose files
         self.processed_poses_names = glob.glob(directory+'processed*.npy')
 
         # load poses in memory
-        self.processed_poses = np.array([np.load(name, mmap_mode='r') for name in self.processed_poses_names])
+        self.processed_poses = [np.load(name, mmap_mode='r') for name in self.processed_poses_names]
 
-        # get pose frame lengths
+        # then build subset of dataset
+        self.processed_poses = [poses[int(start * poses.shape[0]) : int(end * poses.shape[0])] for poses in self.processed_poses]
+
+        # get pose frame lengths of this subset
         self.poses_lengths = np.array([pose.shape[0] for pose in self.processed_poses])
 
+        print(self.poses_lengths)
         # get total combined dataset len
         self.seq_len = seq_len
         self.dataset_lens = (self.poses_lengths / self.seq_len).astype(int)
@@ -44,9 +48,13 @@ class AudioToPosesDirDataset(Dataset):
                 mfcc_name = directory + f"mfcc_{pose_name[-3]}_line_{pose_name[-1]}"
                 self.mfcc_names.append(mfcc_name)
 
-            self.mfccs = np.array([np.load(name, mmap_mode='r').T for name in self.mfcc_names])
-            self.mfcc_lengths = np.array([mfcc.shape[0] for mfcc in self.mfccs])
+            self.mfccs = [np.load(name, mmap_mode='r').T for name in self.mfcc_names]
 
+            # subset accordingly
+            self.mfccs = [mfcc[int(start * mfcc.shape[0]) : int(3 * pose_length) + int(start * mfcc.shape[0])] for mfcc, pose_length in zip(self.mfccs, self.poses_lengths)]
+
+            self.mfcc_lengths = np.array([mfcc.shape[0] for mfcc in self.mfccs])
+            print(self.mfcc_lengths)
         # only need to modify data for nextpose=True or both pose2pose and nextpose=False
 
 
