@@ -290,15 +290,8 @@ class AudioToBodyDynamics(object):
 
         # Visualize VAE latent space
         if self.model_name == 'VAE':
-            x, y = [], []
-            for input, output in self.generator:
-                mu, logvar = self.model.encode(input)
-                print("mu ", mu)
-                print("logvar ", logvar)
-                x.append(mu)
-                y.append(logvar)
-            plt.plot(x,y)
-            plt.show()
+            self.vae_plot()
+
 
         # self.plotResults(logfldr, epoch_losses, batch_losses, val_losses)
         # return best_train_loss, best_val_loss
@@ -347,6 +340,21 @@ class AudioToBodyDynamics(object):
         save_filename = os.path.join(logfldr, "results.png")
         plt.savefig(save_filename)
         plt.close()
+
+    def vae_plot(self):
+        z_list = torch.Tensor(1,2)
+        for input, output in self.generator:
+            mu, logvar = self.model.encode(input)
+            z = self.model.reparameterize(mu, logvar)
+            z2 = z[:,-1,:]
+            z_list = torch.cat((z_list.double(), z2.double()), 0)
+
+        indices = np.random.randint(low=1, high=z_list.shape[0], size=100)
+        coords = [z_list[ind,:].detach().numpy() for ind in indices]
+        xs = [c[0] for c in coords]
+        ys = [c[1] for c in coords]
+        plt.scatter(xs, ys)
+        plt.show()
 
 
 def createOptions():
