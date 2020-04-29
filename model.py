@@ -337,11 +337,11 @@ class VAE(nn.Module):
     def __init__(self, options):
         super(VAE, self).__init__()
         self.options = options
-        self.fc1 = nn.Conv1d(38, 10)
-        self.fc21 = nn.Conv1d(10, 2)
-        self.fc22 = nn.Conv1d(10, 2)
-        self.fc3 = nn.Linear(2, 10)
-        self.fc4 = nn.Linear(10, 38)
+        self.fc1 = nn.Conv1d(38, 10, 3)
+        self.fc21 = nn.Conv1d(10, 2, 3)
+        self.fc22 = nn.Conv1d(10, 2, 3)
+        self.fc3 = nn.Conv1d(2, 10, 3)
+        self.fc4 = nn.Conv1d(10, 38, 3)
 
     def encode(self, x):
         h1 = nn.functional.relu(self.fc1(x))
@@ -357,6 +357,6 @@ class VAE(nn.Module):
         return torch.sigmoid(self.fc4(h3))
 
     def forward(self, x):
-        mu, logvar = self.encode(x.view(-1, 784))
+        mu, logvar = self.encode(x)
         z = self.reparameterize(mu, logvar)
         return self.decode(z), mu, logvar

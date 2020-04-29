@@ -10,6 +10,7 @@ import argparse
 import logging
 import numpy as np
 import json
+import matplotlib.pyplot as plt
 
 '''
 This script takes an input of audio MFCC features and uses
@@ -103,18 +104,22 @@ class AudioToBodyDynamics(object):
         return torch.mean(out)
 
     def mdn_loss(self, y, pi, mu, sigma):
-
         m = torch.distributions.Normal(loc=mu, scale=sigma)
         loss = torch.exp(m.log_prob(y))
         loss = torch.sum(loss * pi, dim=2)
         loss = -torch.log(loss)
         return torch.mean(loss)
 
+    # https://github.com/pytorch/examples/blob/master/vae/main.py, Appendix B of https://github.com/pytorch/examples/blob/master/vae/main.py
+    def vae_loss(self, targets, recon_targets, mu, logvar):
+        BCE = nn.functional.binary_cross_entropy(recon_x, x.view(-1, 784), reduction='sum')
+        KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+        return BCE+KLD
+
     def saveModel(self, state_info, path):
         torch.save(state_info, path)
 
     def loadModelCheckpoint(self, path):
-
         checkpoint = torch.load(path, map_location=self.device)
         self.model.load_state_dict(checkpoint['model_state_dict'])
         self.optim.load_state_dict(checkpoint['optim_state_dict'])
@@ -141,6 +146,8 @@ class AudioToBodyDynamics(object):
 
         if self.model_name == 'AudioToJointsSeq2Seq':
             predictions = self.model.forward(inputs, targets)
+        elif self.model_name == 'VAE':
+            predictions, mu, logvar = self.model.forward(inputs)
         else:
             predictions = self.model.forward(inputs)
 
@@ -153,6 +160,8 @@ class AudioToBodyDynamics(object):
         elif self.model_name == 'MDNRNN':
             # predictions = (pi, mu, sigma), (h, c)
             loss = self.mdn_loss(targets, predictions[0][0], predictions[0][1], predictions[0][2])
+        elif self.model_name == 'VAE':
+            loss = self.vae_loss(targets, predictions, mu, logvar)
         else:
             loss = criterion(predictions, targets)
         # # Get loss in pixel space
@@ -166,20 +175,17 @@ class AudioToBodyDynamics(object):
 
         if not self.is_freestyle_mode: # train
             # for each data point
-            count = 0
             for mfccs, poses in self.generator:
                 self.model.train() # pass train flag to model
                 # mfccs = mfccs.float()
                 # poses = poses.float()
 
-                vis_data, train_loss = self.runNetwork(mfccs, poses,
-                                                validate=False)
+                vis_data, train_loss = self.runNetwork(mfccs, poses)
                 self.optim.zero_grad()
                 train_loss.backward()
                 self.optim.step()
                 train_loss = train_loss.data.tolist()
                 train_losses.append(train_loss)
-            # validate
 
         # test or predict / play w/ model
         if self.is_freestyle_mode:
@@ -244,7 +250,6 @@ class AudioToBodyDynamics(object):
             log.info("Epoch {} / {}".format(i, max_epochs))
             log.info("Training Loss (1980 x 1080): {}".format(iter_mean))
             best_train_loss = iter_mean
-            # log.info("Validation Loss (1980 x 1080): {}".format(iter_val_mean))
             '''
             improved = iter_val_mean[1] < best_loss
             if improved:
@@ -284,6 +289,15 @@ class AudioToBodyDynamics(object):
             #             logfldr, "Epoch_{}/pca_{}.png".format(i, j))
             #         self.visualizePCA(predictions[0], targets[0], j, save_path)
             '''
+
+        if self.model_name == 'VAE':
+            x, y = [], []
+            for input, output in self.generator:
+                mu, logvar = self.model.encode(input)
+                x.append(mu)
+                y.append(logvar)
+            plt.plot(x,y)
+            plt.show()
 
         # self.plotResults(logfldr, epoch_losses, batch_losses, val_losses)
         # return best_train_loss, best_val_loss
@@ -336,7 +350,6 @@ class AudioToBodyDynamics(object):
 
 def createOptions():
     #TODO
-    # Default configuration for PianoNet
     parser = argparse.ArgumentParser(
         description="Pytorch: Audio To Body Dynamics Model"
     )
@@ -430,7 +443,7 @@ def main():
 
         if args.autoencode:
             dataset = AudioToPosesDirDataset(directory=root_dir, seq_len=seq_len, pose2pose=True)
-        elif args.dataset_size == 'big'
+        elif args.dataset_size == 'big':
             dataset = AudioToPosesDirDataset(root_dir, seq_len)
         else:
             dataset = AudioToPosesDataset(mfcc_file, pose_file, seq_len)
