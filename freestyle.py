@@ -26,7 +26,7 @@ np.random.seed(1234)
 
 class AudioToBodyDynamics(object):
     """
-    Defines a wrapper class for training and evaluating a model. 
+    Defines a wrapper class for training and evaluating a model.
     Inputs:
            args    (argparse object):      model settings
            dataset (pytorch Dataloader):   DataLoader wrapper around Dataset
@@ -38,7 +38,6 @@ class AudioToBodyDynamics(object):
         self.device = args.device
         self.log_frequency = args.log_frequency
 
-        self.is_test_mode = is_test
         self.is_freestyle_mode = freestyle
         self.generator = generator
         self.model_name = args.model_name
@@ -79,7 +78,10 @@ class AudioToBodyDynamics(object):
         elif args.model_name == 'MDNRNN':
             from model import MDNRNN
             self.model = MDNRNN(model_options).cuda(args.device).double()
-            
+        elif args.model_name == 'VAE':
+            from model import VAE
+            self.model = VAE(model_options).cuda(args.device).double()
+
 
         # construct the model
         self.optim = optim.Adam(self.model.parameters(), lr=args.lr)
@@ -100,18 +102,22 @@ class AudioToBodyDynamics(object):
         return torch.mean(out)
 
     def mdn_loss(self, y, pi, mu, sigma):
-
         m = torch.distributions.Normal(loc=mu, scale=sigma)
         loss = torch.exp(m.log_prob(y))
         loss = torch.sum(loss * pi, dim=2)
         loss = -torch.log(loss)
         return torch.mean(loss)
 
+    # https://github.com/pytorch/examples/blob/master/vae/main.py, Appendix B of https://github.com/pytorch/examples/blob/master/vae/main.py
+    def vae_loss(self, targets, recon_targets, mu, logvar):
+        BCE = nn.functional.binary_cross_entropy(recon_targets, targets, reduction='sum')
+        KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+        return BCE+KLD
+
     def saveModel(self, state_info, path):
         torch.save(state_info, path)
 
     def loadModelCheckpoint(self, path):
-
         checkpoint = torch.load(path, map_location=self.device)
         self.model.load_state_dict(checkpoint['model_state_dict'])
         self.optim.load_state_dict(checkpoint['optim_state_dict'])
@@ -130,7 +136,7 @@ class AudioToBodyDynamics(object):
             # import from gpu device to cpu, convert to numpy
             return x.cpu().data.numpy()
 
-        
+
         inputs = Variable(torch.DoubleTensor(inputs.double()).to(self.device))
 
         # reshape targets into (batch * seq_len, input features)
@@ -138,6 +144,8 @@ class AudioToBodyDynamics(object):
 
         if self.model_name == 'AudioToJointsSeq2Seq':
             predictions = self.model.forward(inputs, targets)
+        elif self.model_name == 'VAE':
+            predictions, mu, logvar = self.model.forward(inputs)
         else:
             predictions = self.model.forward(inputs)
 
@@ -150,6 +158,8 @@ class AudioToBodyDynamics(object):
         elif self.model_name == 'MDNRNN':
             # predictions = (pi, mu, sigma), (h, c)
             loss = self.mdn_loss(targets, predictions[0][0], predictions[0][1], predictions[0][2])
+        elif self.model_name == 'VAE':
+            loss = self.vae_loss(targets, predictions, mu, logvar)
         else:
             loss = criterion(predictions, targets)
         # # Get loss in pixel space
@@ -163,20 +173,17 @@ class AudioToBodyDynamics(object):
 
         if not self.is_freestyle_mode: # train
             # for each data point
-            count = 0
             for mfccs, poses in self.generator:
                 self.model.train() # pass train flag to model
                 # mfccs = mfccs.float()
                 # poses = poses.float()
 
-                vis_data, train_loss = self.runNetwork(mfccs, poses,
-                                                validate=False)
+                vis_data, train_loss = self.runNetwork(mfccs, poses)
                 self.optim.zero_grad()
                 train_loss.backward()
                 self.optim.step()
                 train_loss = train_loss.data.tolist()
                 train_losses.append(train_loss)
-            # validate
 
         # test or predict / play w/ model
         if self.is_freestyle_mode:
@@ -194,7 +201,7 @@ class AudioToBodyDynamics(object):
                                            2)
                 predictions.append(pred)
                 targets.append(vis_data[1])
-            
+
         return train_losses, val_losses, predictions, targets
 
     def trainModel(self, max_epochs, logfldr, patience):
@@ -241,7 +248,6 @@ class AudioToBodyDynamics(object):
             log.info("Epoch {} / {}".format(i, max_epochs))
             log.info("Training Loss (1980 x 1080): {}".format(iter_mean))
             best_train_loss = iter_mean
-            # log.info("Validation Loss (1980 x 1080): {}".format(iter_val_mean))
             '''
             improved = iter_val_mean[1] < best_loss
             if improved:
@@ -281,6 +287,18 @@ class AudioToBodyDynamics(object):
             #             logfldr, "Epoch_{}/pca_{}.png".format(i, j))
             #         self.visualizePCA(predictions[0], targets[0], j, save_path)
             '''
+
+        # Visualize VAE latent space
+        if self.model_name == 'VAE':
+            x, y = [], []
+            for input, output in self.generator:
+                mu, logvar = self.model.encode(input)
+                print("mu ", mu)
+                print("logvar ", logvar)
+                x.append(mu)
+                y.append(logvar)
+            plt.plot(x,y)
+            plt.show()
 
         # self.plotResults(logfldr, epoch_losses, batch_losses, val_losses)
         # return best_train_loss, best_val_loss
@@ -333,7 +351,6 @@ class AudioToBodyDynamics(object):
 
 def createOptions():
     #TODO
-    # Default configuration for PianoNet
     parser = argparse.ArgumentParser(
         description="Pytorch: Audio To Body Dynamics Model"
     )
@@ -341,8 +358,7 @@ def createOptions():
     parser.add_argument('--dataset_size', type=str)
     parser.add_argument('--p2p', type=bool, default=False)
     parser.add_argument('--model_name', type=str, default="AudioToJoints")
-    # parser.add_argument("--data", type=str, default="piano_data.json",
-    #                     help="Path to data file")
+    parser.add_argument('--autoencode', type=bool, default=False)
 
     # dior_pop_smoke.mp3',
     parser.add_argument("--audio_file", type=str, default='/Users/will.i.liam/Desktop/final_project/VEE5qqDPVGY/audio/dior_pop_smoke.mp3',
@@ -360,10 +376,8 @@ def createOptions():
                         help="Dimension of the hidden representation")
     parser.add_argument("--test_model", type=str, default=None,
                         help="Location for saved model to load")
-    parser.add_argument("--visualize", type=bool, default=False,
-                        help="Visualize the output of the model. Use only in Test")
-    parser.add_argument("--save_predictions", type=bool, default=True,
-                        help="Whether or not to save predictions. Use only in Test")
+    # parser.add_argument("--visualize", type=bool, default=False,
+    #                     help="Visualize the output of the model. Use only in Test")
     parser.add_argument("--device", type=str, default="gpu",
                         help="Device to train on. Use 'cpu' if to train on cpu.")
     parser.add_argument("--max_epochs", type=int, default=10,
@@ -395,8 +409,6 @@ def createOptions():
 def main():
     args = createOptions()
     args.device = torch.device(args.device)
-    # data_loc = args.data
-    is_test_mode = args.test_model is not None
 
     root_dir = 'data/'
     mfcc_file = ""
@@ -426,7 +438,9 @@ def main():
             print(mfcc_file)
             print(pose_file)
 
-        if args.dataset_size == 'big':
+        if args.autoencode:
+            dataset = AudioToPosesDirDataset(directory=root_dir, seq_len=seq_len, pose2pose=True)
+        elif args.dataset_size == 'big':
             dataset = AudioToPosesDirDataset(root_dir, seq_len)
         else:
             dataset = AudioToPosesDataset(mfcc_file, pose_file, seq_len)
@@ -438,13 +452,9 @@ def main():
     generator = data.DataLoader(dataset, **params)
 
     # Create model
-    dynamics_learner = AudioToBodyDynamics(args, 
+    dynamics_learner = AudioToBodyDynamics(args,
                                            generator,
                                            freestyle=args.freestyle)
-
-    # logfldr = args.logfldr
-    # if not os.path.isdir(logfldr):
-    #     os.makedirs(logfldr)
 
     # Train model
     if not args.freestyle:
