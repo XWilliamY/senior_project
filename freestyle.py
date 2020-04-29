@@ -10,7 +10,6 @@ import argparse
 import logging
 import numpy as np
 import json
-import matplotlib.pyplot as plt
 
 '''
 This script takes an input of audio MFCC features and uses
@@ -39,7 +38,6 @@ class AudioToBodyDynamics(object):
         self.device = args.device
         self.log_frequency = args.log_frequency
 
-        self.is_test_mode = is_test
         self.is_freestyle_mode = freestyle
         self.generator = generator
         self.model_name = args.model_name
@@ -147,7 +145,9 @@ class AudioToBodyDynamics(object):
         if self.model_name == 'AudioToJointsSeq2Seq':
             predictions = self.model.forward(inputs, targets)
         elif self.model_name == 'VAE':
+            print("vae ", inputs.shape)
             predictions, mu, logvar = self.model.forward(inputs)
+            print("post ", predictions.shape)
         else:
             predictions = self.model.forward(inputs)
 
@@ -290,6 +290,7 @@ class AudioToBodyDynamics(object):
             #         self.visualizePCA(predictions[0], targets[0], j, save_path)
             '''
 
+        # Visualize VAE latent space
         if self.model_name == 'VAE':
             x, y = [], []
             for input, output in self.generator:
@@ -375,10 +376,8 @@ def createOptions():
                         help="Dimension of the hidden representation")
     parser.add_argument("--test_model", type=str, default=None,
                         help="Location for saved model to load")
-    parser.add_argument("--visualize", type=bool, default=False,
-                        help="Visualize the output of the model. Use only in Test")
-    parser.add_argument("--save_predictions", type=bool, default=True,
-                        help="Whether or not to save predictions. Use only in Test")
+    # parser.add_argument("--visualize", type=bool, default=False,
+    #                     help="Visualize the output of the model. Use only in Test")
     parser.add_argument("--device", type=str, default="gpu",
                         help="Device to train on. Use 'cpu' if to train on cpu.")
     parser.add_argument("--max_epochs", type=int, default=10,
@@ -410,8 +409,6 @@ def createOptions():
 def main():
     args = createOptions()
     args.device = torch.device(args.device)
-    # data_loc = args.data
-    is_test_mode = args.test_model is not None
 
     root_dir = 'data/'
     mfcc_file = ""

@@ -49,7 +49,7 @@ class AudioToPosesDirDataset(Dataset):
 
         # only need to modify data for nextpose=True or both pose2pose and nextpose=False
 
-        
+
     def __len__(self):
         return int(np.sum(self.dataset_lens))
 
@@ -62,7 +62,7 @@ class AudioToPosesDirDataset(Dataset):
         target_pose = self.processed_poses[file_idx][target_idx * self.seq_len : (target_idx + 1) * self.seq_len]
         y = target_pose.reshape([self.seq_len, -1])
         y = torch.from_numpy(y)
-        
+
         # handle source
         if self.audio2pose:
             mfcc_idx = self.seq_len * 3
@@ -74,26 +74,20 @@ class AudioToPosesDirDataset(Dataset):
             return y, y
 
         return X, y
-    
+
     def getSingleInputFeatureDims(self):
         if self.audio2pose:
             return self.mfccs[0][-1].shape[0] * 3
         if self.pose2pose or self.nextpose:
             return self.getSingleOutputFeatureDims()
-        
+
     def getSingleOutputFeatureDims(self):
         return self.processed_poses[0][-1].shape[0] * 2
-    
+
     def getDimsPerBatch(self):
         return self.getSingleInputFeatureDims(), self.getSingleOutputFeatureDims()
 
 
-
-
-        
-
-
-    
 class AudioToPosesTwoDataset(Dataset):
     """ Aligns mfcc .npy file to poses .npy file """
     def __init__(self, mfcc_file=None, pose_file=None):
@@ -106,12 +100,12 @@ class AudioToPosesTwoDataset(Dataset):
              pose_file (optional, string): Path to .npy file w/ joint keypoints
         """
         self.mfcc_file = mfcc_file
-        self.pose_file = pose_file 
-    
+        self.pose_file = pose_file
+
         self.mfccs = np.load(self.mfcc_file)
         # transform to total_frames by mfcc_features
         self.mfccs = self.mfccs.T.astype('float64')
-            
+
         if self.pose_file:
             self.poses = np.load(self.pose_file).astype('float64')
         else: # create dummy
@@ -123,7 +117,7 @@ class AudioToPosesTwoDataset(Dataset):
         if self.pose_file:
             return True
         return False
-    
+
     def getDataDims(self):
         """
         MFCC dimensions
@@ -136,10 +130,10 @@ class AudioToPosesTwoDataset(Dataset):
 
     def getSingleOutputFeatureDims(self):
         return self.poses.shape[1] * self.poses.shape[2]
-    
+
     def getDimsPerBatch(self):
         return self.getSingleInputFeatureDims(), self.getSingleOutputFeatureDims()
-    
+
     def __len__(self):
         """
         Returns the number of video frames
@@ -148,7 +142,7 @@ class AudioToPosesTwoDataset(Dataset):
 
     def __getitem__(self, idx):
         """
-        This will batch according to len of dataset 
+        This will batch according to len of dataset
         Thus each idx corresponds to one video frame
 
         Args:
@@ -166,7 +160,7 @@ class AudioToPosesTwoDataset(Dataset):
         y = self.poses[idx]
         y = y.reshape([len(idx), -1])
         return X, y
-    
+
 class AudioToPosesDataset(Dataset):
     """ Aligns mfcc .npy file to poses .npy file """
     def __init__(self, mfcc_file=None, pose_file=None, seq_len=1):
@@ -179,13 +173,13 @@ class AudioToPosesDataset(Dataset):
              pose_file (optional, string): Path to .npy file w/ joint keypoints
         """
         self.mfcc_file = mfcc_file
-        self.pose_file = pose_file 
+        self.pose_file = pose_file
         self.seq_len = seq_len
-    
+
         self.mfccs = np.load(self.mfcc_file)
         # transform to total_frames by mfcc_features
         self.mfccs = self.mfccs.T.astype('float64')
-            
+
         if self.pose_file:
             self.poses = np.load(self.pose_file).astype('float64')
         else: # create dummy
@@ -197,7 +191,7 @@ class AudioToPosesDataset(Dataset):
         if self.pose_file:
             return True
         return False
-    
+
     def getDataDims(self):
         """
         MFCC dimensions
@@ -210,10 +204,10 @@ class AudioToPosesDataset(Dataset):
 
     def getSingleOutputFeatureDims(self):
         return self.poses.shape[1] * self.poses.shape[2]
-    
+
     def getDimsPerBatch(self):
         return self.getSingleInputFeatureDims(), self.getSingleOutputFeatureDims()
-    
+
     def __len__(self):
         """
         Returns the number of video frames
@@ -253,7 +247,7 @@ class PosesToPosesDataset(Dataset):
         # offset them by seq_len
         self.input_poses = np.load(poses_file)[:-1]
         self.output_poses = np.load(poses_file)[1:]
-    
+
     def getDataDims(self):
         return self.input_poses.shape, self.output_poses.shape
 
@@ -262,10 +256,10 @@ class PosesToPosesDataset(Dataset):
 
     def getSingleOutputFeatureDims(self):
         return self.output_poses.shape[1] * self.output_poses.shape[2]
-    
+
     def getDimsPerBatch(self):
         return self.getSingleInputFeatureDims(), self.getSingleOutputFeatureDims()
-    
+
     def __len__(self):
         """
         Returns the number of video frames
@@ -287,4 +281,3 @@ class PosesToPosesDataset(Dataset):
         y = self.output_poses[idx * self.seq_len : (idx+1) * self.seq_len]
         y = y.reshape([self.seq_len, -1])
         return X, y
-
