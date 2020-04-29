@@ -153,7 +153,7 @@ class AudioToBodyDynamics(object):
         else:
             loss = criterion(predictions, targets)
         # # Get loss in pixel space
-        return (to_numpy(torch.DoubleTensor([1])), to_numpy(targets)), loss
+        return (to_numpy(predictions), to_numpy(targets)), loss
 
     def runEpoch(self):
         # given one epoch
