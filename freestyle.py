@@ -112,7 +112,7 @@ class AudioToBodyDynamics(object):
 
     # https://github.com/pytorch/examples/blob/master/vae/main.py, Appendix B of https://github.com/pytorch/examples/blob/master/vae/main.py
     def vae_loss(self, targets, recon_targets, mu, logvar):
-        BCE = nn.functional.binary_cross_entropy(recon_x, x.view(-1, 784), reduction='sum')
+        BCE = nn.functional.binary_cross_entropy(recon_targets, targets, reduction='sum')
         KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
         return BCE+KLD
 
