@@ -145,9 +145,7 @@ class AudioToBodyDynamics(object):
         if self.model_name == 'AudioToJointsSeq2Seq':
             predictions = self.model.forward(inputs, targets)
         elif self.model_name == 'VAE':
-            print("vae ", inputs.shape)
             predictions, mu, logvar = self.model.forward(inputs)
-            print("post ", predictions.shape)
         else:
             predictions = self.model.forward(inputs)
 
@@ -295,6 +293,8 @@ class AudioToBodyDynamics(object):
             x, y = [], []
             for input, output in self.generator:
                 mu, logvar = self.model.encode(input)
+                print("mu ", mu)
+                print("logvar ", logvar)
                 x.append(mu)
                 y.append(logvar)
             plt.plot(x,y)

@@ -337,14 +337,18 @@ class VAE(nn.Module):
     def __init__(self, options):
         super(VAE, self).__init__()
         self.options = options
-        self.fc1 = nn.Conv1d(1, 10, 3)
-        self.fc21 = nn.Conv1d(10, 1, 3)
-        self.fc22 = nn.Conv1d(10, 1, 3)
-        self.fc3 = nn.Conv1d(1, 10, 3)
-        self.fc4 = nn.Conv1d(10, 1, 3)
+        # self.fc1 = nn.Conv1d(1, 400, 3, padding=1)
+        # self.fc21 = nn.Conv1d(400, 20, 3, padding=1)
+        # self.fc22 = nn.Conv1d(400, 20, 3, padding=1)
+        # self.fc3 = nn.Conv1d(20, 400, 3, padding=1)
+        # self.fc4 = nn.Conv1d(400, 1, 3, padding=1)
+        self.fc1 = nn.Linear(38, 10)
+        self.fc21 = nn.Linear(10, 2)
+        self.fc22 = nn.Linear(10, 2)
+        self.fc3 = nn.Linear(2, 10)
+        self.fc4 = nn.Linear(10, 38)
 
     def encode(self, x):
-        print(x.shape)
         h1 = nn.functional.relu(self.fc1(x))
         return self.fc21(h1), self.fc22(h1)
 
