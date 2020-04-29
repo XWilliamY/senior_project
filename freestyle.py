@@ -29,24 +29,25 @@ class AudioToBodyDynamics(object):
     Defines a wrapper class for training and evaluating a model.
     Inputs:
            args    (argparse object):      model settings
-           dataset (pytorch Dataloader):   DataLoader wrapper around Dataset
+           generator (tuple DataLoader):   a tuple of at least one DataLoader
     """
 
-    def __init__(self, args, generator, is_test=False, freestyle=False):
+    def __init__(self, args, generator, freestyle=False):
         # TODO
         super(AudioToBodyDynamics, self).__init__()
         self.device = args.device
         self.log_frequency = args.log_frequency
 
         self.is_freestyle_mode = freestyle
+
         self.generator = generator
         self.model_name = args.model_name
         self.ident = args.ident
         self.model_name = args.model_name
 
-        input_dim, output_dim = generator.dataset.getDimsPerBatch()
+        input_dim, output_dim = generator[0].dataset.getDimsPerBatch()
+
         model_options = {
-            'z_size': args.z_size,
             'seq_len': args.seq_len,
             'device': args.device,
             'dropout': args.dp,
@@ -122,7 +123,7 @@ class AudioToBodyDynamics(object):
         self.model.load_state_dict(checkpoint['model_state_dict'])
         self.optim.load_state_dict(checkpoint['optim_state_dict'])
 
-    def runNetwork(self, inputs, targets, validate=False):
+    def runNetwork(self, inputs, targets):
         """
         Train on one given mfcc pose pair
         Args:
@@ -173,34 +174,50 @@ class AudioToBodyDynamics(object):
 
         if not self.is_freestyle_mode: # train
             # for each data point
-            for mfccs, poses in self.generator:
+            count = 0
+            for mfccs, poses in self.generator[0]:
+                print(f"training {count}")
                 self.model.train() # pass train flag to model
-                # mfccs = mfccs.float()
-                # poses = poses.float()
 
-                vis_data, train_loss = self.runNetwork(mfccs, poses)
+                pred_targs, train_loss = self.runNetwork(mfccs, poses)
                 self.optim.zero_grad()
                 train_loss.backward()
                 self.optim.step()
                 train_loss = train_loss.data.tolist()
                 train_losses.append(train_loss)
+                count += 1
+
+            # validation loss
+            count = 0
+            for mfccs, poses in self.generator[1]:
+                self.model.eval()
+                print(f"eval {count}")
+                pred_targs, val_loss = self.runNetwork(mfccs, poses)
+
+                val_loss = val_loss.data.tolist()
+                val_losses.append(val_loss)
+                pred = pred_targs[0].reshape(int(pred_targs[0].shape[0] *
+                                                 pred_targs[0].shape[1]),
+                                             19,
+                                             2)
+                predictions.append(pred)
+                targets.append(pred_targs[1])
+                count += 1
 
         # test or predict / play w/ model
         if self.is_freestyle_mode:
-            print('freestyle mode')
-            for mfccs, poses in self.generator:
+            for mfccs, poses in self.generator[0]:
                 self.model.eval()
                 # mfccs = mfccs.float()
-                vis_data, val_loss = self.runNetwork(mfccs, poses,
-                                                     validate=True)
+                pred_targs, val_loss = self.runNetwork(mfccs, poses)
                 val_loss = val_loss.data.tolist()
                 val_losses.append(val_loss)
-                pred = vis_data[0].reshape(int(vis_data[0].shape[0] *
-                                               vis_data[0].shape[1]),
-                                           19,
-                                           2)
+                pred = pred_targs[0].reshape(int(pred_targs[0].shape[0] *
+                                                 pred_targs[0].shape[1]),
+                                             19,
+                                             2)
                 predictions.append(pred)
-                targets.append(vis_data[1])
+                targets.append(pred_targs[1])
 
         return train_losses, val_losses, predictions, targets
 
@@ -354,14 +371,10 @@ def createOptions():
     parser = argparse.ArgumentParser(
         description="Pytorch: Audio To Body Dynamics Model"
     )
-    parser.add_argument('--z_size', default=32)
-    parser.add_argument('--dataset_size', type=str)
     parser.add_argument('--p2p', type=bool, default=False)
     parser.add_argument('--model_name', type=str, default="AudioToJoints")
     parser.add_argument('--autoencode', type=bool, default=False)
-
-    # dior_pop_smoke.mp3',
-    parser.add_argument("--audio_file", type=str, default='/Users/will.i.liam/Desktop/final_project/VEE5qqDPVGY/audio/dior_pop_smoke.mp3',
+    parser.add_argument("--audio_file", type=str, default=None,
                         help="Only in for Test. Location audio file for generating test video")
     parser.add_argument("--freestyle", type=bool, default=False,
                         help="Expects an audio file. Does not take in any pose files: model will generate according to given audio.")
@@ -374,11 +387,11 @@ def createOptions():
                         help="The fraction of the training data to use as validation")
     parser.add_argument("--hidden_size", type=int, default=1024,
                         help="Dimension of the hidden representation")
-    parser.add_argument("--test_model", type=str, default=None,
+    parser.add_argument("--model_dir", type=str, default=None,
                         help="Location for saved model to load")
     # parser.add_argument("--visualize", type=bool, default=False,
     #                     help="Visualize the output of the model. Use only in Test")
-    parser.add_argument("--device", type=str, default="gpu",
+    parser.add_argument("--device", type=str, default="cuda",
                         help="Device to train on. Use 'cpu' if to train on cpu.")
     parser.add_argument("--max_epochs", type=int, default=10,
                         help="max number of epochs to run for")
@@ -414,6 +427,10 @@ def main():
     mfcc_file = ""
     pose_file = None
     seq_len = args.seq_len
+    params = {'batch_size':args.batch_size,
+              'shuffle':False,
+              'num_workers': 1
+              }
 
     if args.p2p:
         pose_file = root_dir + 'processed_compiled_data_line_0.npy'
@@ -429,27 +446,24 @@ def main():
                 # get audio
                 mfcc_file = output_file_path
                 pose_file = None
+
+                # use pose_file=None feature of dataset
+                dataset = AudioToPosesDataset(mfcc_file, pose_file, seq_len)
+                generator = (data.DataLoader(dataset, **params))
             else:
                 print("Missing audio file")
         else:
-            mfcc_file = root_dir + 'mfcc_VEE5qqDPVGY_line_0.npy'
-            pose_file = root_dir + 'processed_VEE5qqDPVGY_line_0.npy'
+            # is training
 
-            print(mfcc_file)
-            print(pose_file)
-
-        if args.autoencode:
-            dataset = AudioToPosesDirDataset(directory=root_dir, seq_len=seq_len, pose2pose=True)
-        elif args.dataset_size == 'big':
-            dataset = AudioToPosesDirDataset(root_dir, seq_len)
-        else:
-            dataset = AudioToPosesDataset(mfcc_file, pose_file, seq_len)
-
-    params = {'batch_size':args.batch_size,
-              'shuffle':False,
-              'num_workers': 1
-              }
-    generator = data.DataLoader(dataset, **params)
+            # check val_split first
+            if args.val_split >= 1:
+                print("Val split cannot be whole or greater than dataset.")
+                exit(1)
+            train_split = 1 - args.val_split
+            # dataset will take (1 - val_split) percent of each individual .npy
+            train_dataset = AudioToPosesDirDataset(root_dir, seq_len, pose2pose=args.autoencode, end=train_split)
+            val_dataset = AudioToPosesDirDataset(root_dir, seq_len, pose2pose=args.autoencode, start=train_split)
+            generator = (data.DataLoader(train_dataset), data.DataLoader(val_dataset))
 
     # Create model
     dynamics_learner = AudioToBodyDynamics(args,
