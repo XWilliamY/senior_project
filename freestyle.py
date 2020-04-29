@@ -47,6 +47,7 @@ class AudioToBodyDynamics(object):
 
         input_dim, output_dim = generator.dataset.getDimsPerBatch()
         model_options = {
+            'z_size': args.z_size,
             'seq_len': args.seq_len,
             'device': args.device,
             'dropout': args.dp,
@@ -75,6 +76,9 @@ class AudioToBodyDynamics(object):
         elif args.model_name == 'AudioToJointsSeq2Seq':
             from model import AudioToJointsSeq2Seq
             self.model = AudioToJointsSeq2Seq(model_options).cuda(args.device).double()
+        elif args.model_name == 'MDNRNN':
+            from model import MDNRNN
+            self.model = MDNRNN(model_options).cuda(args.device).double()
             
 
         # construct the model
@@ -94,6 +98,14 @@ class AudioToBodyDynamics(object):
         out = torch.sum(square_diff, -1, keepdim=True)
         print(torch.mean(out))
         return torch.mean(out)
+
+    def mdn_loss(self, y, pi, mu, sigma):
+
+        m = torch.distributions.Normal(loc=mu, scale=sigma)
+        loss = torch.exp(m.log_prob(y))
+        loss = torch.sum(loss * pi, dim=2)
+        loss = -torch.log(loss)
+        return torch.mean(loss)
 
     def saveModel(self, state_info, path):
         torch.save(state_info, path)
@@ -135,6 +147,9 @@ class AudioToBodyDynamics(object):
         criterion = nn.L1Loss()
         if self.model_name == 'AudioToJointsSeq2Seq':
             loss = criterion(predictions.to(self.device), targets.to(self.device).float())
+        elif self.model_name == 'MDNRNN':
+            # predictions = (pi, mu, sigma), (h, c)
+            loss = self.mdn_loss(targets, predictions[0][0], predictions[0][1], predictions[0][2])
         else:
             loss = criterion(predictions, targets)
         # # Get loss in pixel space
@@ -322,6 +337,7 @@ def createOptions():
     parser = argparse.ArgumentParser(
         description="Pytorch: Audio To Body Dynamics Model"
     )
+    parser.add_argument('--z_size', default=32)
     parser.add_argument('--dataset_size', type=str)
     parser.add_argument('--p2p', type=bool, default=False)
     parser.add_argument('--model_name', type=str, default="AudioToJoints")

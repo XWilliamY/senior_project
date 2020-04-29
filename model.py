@@ -14,7 +14,8 @@ import torch.nn as nn
 import torch.nn.init as init
 from torch.autograd import Variable
 import numpy as np
-
+import torch.nn.functional as F
+from torch.distributions import Categorical
 
 class Residual(nn.Module):
     def __init__(self, linear_hidden = 1024, time = 1024):
@@ -112,7 +113,56 @@ class AudioToJointsThree(nn.Module):
                                           self.options['output_dim'])
         return predictions
 
+class MDNRNN(nn.Module):
+    def __init__(self, options, n_hidden=256, n_gaussians=5, n_layers=1):
+        super(MDNRNN, self).__init__()
+        self.options = options
+
+        self.n_hidden = n_hidden
+        self.n_gaussians = n_gaussians
+        self.n_layers = n_layers
+
+        self.lstm = nn.LSTM(self.options['input_dim'],
+                            self.options['hidden_dim'],
+                            batch_first=True).double()
         
+        self.pi = nn.Sequential(
+            nn.Linear(self.options['hidden_dim'], self.options['output_dim'] * n_gaussians),
+            nn.Softmax(dim=2)
+            ).double()
+
+        self.sigma = nn.Linear(self.options['hidden_dim'], self.options['output_dim'] * n_gaussians).double()
+        self.mu = nn.Linear(self.options['hidden_dim'], self.options['output_dim'] * n_gaussians).double()
+
+    def get_mixture_coef(self, inputs):
+        rollout_length = inputs.size(1) # sequence_length
+
+        # use the linear layers as approximators for different Gaussian stuff
+        pi, mu, sigma = self.pi(inputs), self.sigma(inputs), self.mu(inputs)
+
+        pi = pi.view(-1, rollout_length, self.n_gaussians, self.options['output_dim'])
+        mu = mu.view(-1, rollout_length, self.n_gaussians, self.options['output_dim'])
+        sigma = sigma.view(-1, rollout_length, self.n_gaussians, self.options['output_dim'])
+
+        sigma = torch.exp(sigma)
+        return pi, mu, sigma
+
+    def forward(self, inputs):
+        y, (h, c) = self.lstm(inputs)
+        pi, mu, sigma = self.get_mixture_coef(y)
+        return (pi, mu, sigma), (h, c)
+
+    def sample(pi, sigma, mu):
+        """
+        pi is multinomial distribution of Gaussians
+        sigma is std dev of each gaussian
+        mu is mean of each gaussian
+        """
+        categorical = Categorical(pi)
+        pis = list(categorical.sample().data)
+        sample = Variable(
+        
+
 class AudioToJoints(nn.Module):
 
     def __init__(self, options):
