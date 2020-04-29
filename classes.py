@@ -61,14 +61,16 @@ class AudioToPosesDirDataset(Dataset):
         # use file_idx and target_idx for both mfccs and pose
         target_pose = self.processed_poses[file_idx][target_idx * self.seq_len : (target_idx + 1) * self.seq_len]
         y = target_pose.reshape([self.seq_len, -1])
-        y = torch.from_numpy(y)
+        copied_y = np.array(y)
+        y = torch.from_numpy(copied_y)
 
         # handle source
         if self.audio2pose:
             mfcc_idx = self.seq_len * 3
             X = self.mfccs[file_idx][target_idx * mfcc_idx : (target_idx + 1) * mfcc_idx]
             X = X.reshape([self.seq_len, -1])
-            X = torch.from_numpy(X)
+            copied_X = np.array(X)
+            X = torch.from_numpy(copied_X)
 
         elif self.pose2pose:
             return y, y
