@@ -174,9 +174,7 @@ class AudioToBodyDynamics(object):
 
         if not self.is_freestyle_mode: # train
             # for each data point
-            count = 0
             for mfccs, poses in self.generator[0]:
-                print(f"training {count}")
                 self.model.train() # pass train flag to model
 
                 pred_targs, train_loss = self.runNetwork(mfccs, poses)
@@ -185,13 +183,10 @@ class AudioToBodyDynamics(object):
                 self.optim.step()
                 train_loss = train_loss.data.tolist()
                 train_losses.append(train_loss)
-                count += 1
 
             # validation loss
-            count = 0
             for mfccs, poses in self.generator[1]:
                 self.model.eval()
-                print(f"eval {count}")
                 pred_targs, val_loss = self.runNetwork(mfccs, poses)
 
                 val_loss = val_loss.data.tolist()
@@ -202,7 +197,6 @@ class AudioToBodyDynamics(object):
                                              2)
                 predictions.append(pred)
                 targets.append(pred_targs[1])
-                count += 1
 
         # test or predict / play w/ model
         if self.is_freestyle_mode:
@@ -267,6 +261,7 @@ class AudioToBodyDynamics(object):
             log.info(f"Training Loss : {iter_mean}")
             log.info(f"Validation Loss : {iter_val_mean}")
             best_train_loss = iter_mean if iter_mean < best_train_loss else best_train_loss
+            best_val_loss = iter_val_mean if iter_val_mean < best_val_loss else best_val_loss
 
         # Visualize VAE latent space
         if self.model_name == 'VAE':
@@ -280,10 +275,10 @@ class AudioToBodyDynamics(object):
             plt.plot(x,y)
             plt.show()
 
-        self.plotResults(logfldr, epoch_losses, batch_losses, val_losses)
+        # self.plotResults(logfldr, epoch_losses, batch_losses, val_losses)
         path = "saved_models/" + self.model_name + str(self.ident) + ".pth"
         self.saveModel(state_info, path)
-        return best_train_loss
+        return best_train_loss, best_val_loss
 
     def plotResults(self, logfldr, epoch_losses, batch_losses, val_losses):
         losses = [epoch_losses, batch_losses, val_losses]
@@ -294,8 +289,8 @@ class AudioToBodyDynamics(object):
         _, ax = plt.subplots(nrows=len(losses), ncols=1)
         for index, pair in enumerate(zip(losses, names)):
             data = [pair[0][j] for j in range(len(pair[0]))]
-                ax[index][i].plot(data, label=pair[1][i])
-                ax[index][i].legend()
+            ax[index][i].plot(data, label=pair[1][i])
+            ax[index][i].legend()
         save_filename = os.path.join(logfldr, "results.png")
         plt.savefig(save_filename)
         plt.close()
@@ -407,9 +402,9 @@ def main():
     # Train model
     if not args.freestyle:
         print("training")
-        min_train = dynamics_learner.trainModel(
+        min_train, min_val = dynamics_learner.trainModel(
             args.max_epochs, args.logfldr, args.patience)
-        best_losses = [min_train]
+        best_losses = [min_train, min_val]
     else:
         outputs = dynamics_learner.runEpoch() # train_losses, val_loss, preds, targets
         iter_train, iter_val, preds, target = outputs
