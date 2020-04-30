@@ -33,24 +33,25 @@ class AudioToBodyDynamics(object):
     Defines a wrapper class for training and evaluating a model.
     Inputs:
            args    (argparse object):      model settings
-           dataset (pytorch Dataloader):   DataLoader wrapper around Dataset
+           generator (tuple DataLoader):   a tuple of at least one DataLoader
     """
 
-    def __init__(self, args, generator, is_test=False, freestyle=False):
+    def __init__(self, args, generator, freestyle=False):
         # TODO
         super(AudioToBodyDynamics, self).__init__()
         self.device = args.device
         self.log_frequency = args.log_frequency
 
         self.is_freestyle_mode = freestyle
+
         self.generator = generator
         self.model_name = args.model_name
         self.ident = args.ident
         self.model_name = args.model_name
 
-        input_dim, output_dim = generator.dataset.getDimsPerBatch()
+        input_dim, output_dim = generator[0].dataset.getDimsPerBatch()
+
         model_options = {
-            'z_size': args.z_size,
             'seq_len': args.seq_len,
             'device': args.device,
             'dropout': args.dp,
@@ -92,17 +93,14 @@ class AudioToBodyDynamics(object):
 
         # Load checkpoint model
         if self.is_freestyle_mode:
-            path = "saved_models/" + args.model_name + str(args.ident) + '.pth'
+            path = f"{model_dir}{args.model_name}_{str(args.ident)}.pth"
             print(path)
             self.loadModelCheckpoint(path)
 
     # general loss function
     def buildLoss(self, predictions, targets):
-        print(predictions.shape)
-        print(targets.shape)
         square_diff = (predictions - targets)**2
         out = torch.sum(square_diff, -1, keepdim=True)
-        print(torch.mean(out))
         return torch.mean(out)
 
     def mdn_loss(self, y, pi, mu, sigma):
@@ -127,7 +125,7 @@ class AudioToBodyDynamics(object):
         self.model.load_state_dict(checkpoint['model_state_dict'])
         self.optim.load_state_dict(checkpoint['optim_state_dict'])
 
-    def runNetwork(self, inputs, targets, validate=False):
+    def runNetwork(self, inputs, targets):
         """
         Train on one given mfcc pose pair
         Args:
@@ -173,36 +171,48 @@ class AudioToBodyDynamics(object):
 
         if not self.is_freestyle_mode: # train
             # for each data point
-            for mfccs, poses in self.generator:
+            for mfccs, poses in self.generator[0]:
                 self.model.train() # pass train flag to model
 
-                vis_data, train_loss = self.runNetwork(mfccs, poses)
+                pred_targs, train_loss = self.runNetwork(mfccs, poses)
                 self.optim.zero_grad()
                 train_loss.backward()
                 self.optim.step()
                 train_loss = train_loss.data.tolist()
                 train_losses.append(train_loss)
 
-        # test or predict / play w/ model
-        if self.is_freestyle_mode:
-            print('freestyle mode')
-            for mfccs, poses in self.generator:
+            # validation loss
+            for mfccs, poses in self.generator[1]:
                 self.model.eval()
-                # mfccs = mfccs.float()
-                vis_data, val_loss = self.runNetwork(mfccs, poses,
-                                                     validate=True)
+                pred_targs, val_loss = self.runNetwork(mfccs, poses)
+
                 val_loss = val_loss.data.tolist()
                 val_losses.append(val_loss)
-                pred = vis_data[0].reshape(int(vis_data[0].shape[0] *
-                                               vis_data[0].shape[1]),
-                                           19,
-                                           2)
+                pred = pred_targs[0].reshape(int(pred_targs[0].shape[0] *
+                                                 pred_targs[0].shape[1]),
+                                             19,
+                                             2)
                 predictions.append(pred)
-                targets.append(vis_data[1])
+                targets.append(pred_targs[1])
+
+        # test or predict / play w/ model
+        if self.is_freestyle_mode:
+            for mfccs, poses in self.generator[0]:
+                self.model.eval()
+                # mfccs = mfccs.float()
+                pred_targs, val_loss = self.runNetwork(mfccs, poses)
+                val_loss = val_loss.data.tolist()
+                val_losses.append(val_loss)
+                pred = pred_targs[0].reshape(int(pred_targs[0].shape[0] *
+                                                 pred_targs[0].shape[1]),
+                                             19,
+                                             2)
+                predictions.append(pred)
+                targets.append(pred_targs[1])
 
         return train_losses, val_losses, predictions, targets
 
-    def trainModel(self, max_epochs, logfldr, patience):
+    def trainModel(self, max_epochs, logfldr, model_dir):
         # TODO
         log.debug("Training model")
         epoch_losses = []
@@ -211,7 +221,10 @@ class AudioToBodyDynamics(object):
         i, best_loss, iters_without_improvement = 0, float('inf'), 0
         best_train_loss, best_val_loss = float('inf'), float('inf')
 
-        filename = 'logs/epoch_of_model_' + str(self.ident) +'.txt'
+        if logfldr:
+            if logfldr[-1] != '/':
+                logfldr += '/'
+        filename = f'{logfldr}epoch_of_model_{str(self.ident)}.txt'
         state_info = {
             'epoch': i,
             'epoch_losses': epoch_losses,
@@ -230,30 +243,41 @@ class AudioToBodyDynamics(object):
                     with open(filename, 'a+') as f:
                         f.write(f"Epoch: {i} started\n")
                 # save the model
-                path = "saved_models/" + self.model_name + str(self.ident) + ".pth"
+                if model_dir:
+                    if model_dir[-1] != '/':
+                        model_dir += '/'
+                path = f"{model_dir}{self.model_name}_{str(self.ident)}.pth"
                 self.saveModel(state_info, path)
 
             # train_info, val_info, predictions, targets
             iter_train, iter_val, predictions, targets = self.runEpoch()
 
             iter_mean = np.mean(iter_train)
+            iter_val_mean = np.mean(iter_val)
             # iter_val_mean = np.mean(iter_val[0]), np.mean(iter_val[1])
 
             epoch_losses.append(iter_mean)
             batch_losses.extend(iter_train)
-            # val_losses.append(iter_val_mean)
+            val_losses.append(iter_val_mean)
 
             log.info("Epoch {} / {}".format(i, max_epochs))
-            log.info("Training Loss (1980 x 1080): {}".format(iter_mean))
-            best_train_loss = iter_mean
+            log.info(f"Training Loss : {iter_mean}")
+            log.info(f"Validation Loss : {iter_val_mean}")
+
+
+            best_train_loss = iter_mean if iter_mean < best_train_loss else best_train_loss
+            best_val_loss = iter_val_mean if iter_val_mean < best_val_loss else best_val_loss
+
 
         # Visualize VAE latent space
         if self.model_name == 'VAE':
             self.vae_plot()
 
-        path = "saved_models/" + self.model_name + str(self.ident) + ".pth"
+
+        self.plotResults(logfldr, epoch_losses, batch_losses, val_losses)
+        path = f"{model_dir}{self.model_name}_{str(self.ident)}.pth"
         self.saveModel(state_info, path)
-        return best_train_loss
+        return best_train_loss, best_val_loss
 
     # plot random subset of poses in VAE latent space
     def vae_plot(self):
@@ -306,24 +330,39 @@ class AudioToBodyDynamics(object):
             file_name = "images/" + f"{count:05}.jpg"
             cv2.imwrite(file_name, canvas)
             count += 1
+=======
 
+    def plotResults(self, logfldr, epoch_losses, batch_losses, val_losses):
+        losses = [epoch_losses, batch_losses, val_losses]
+        names = [            
+            ["Epoch loss"],
+            ["Batch loss"],
+            ["Val loss"]]
+        _, ax = plt.subplots(nrows=len(losses), ncols=1)
+        for index, pair in enumerate(zip(losses, names)):
+            data = [pair[0][j] for j in range(len(pair[0]))]
+            ax[index].plot(data, label=pair[1])
+            ax[index].legend()
+        if logfldr:
+            if logfldr[-1] != '/':
+                logfldr += '/'
+        save_filename = os.path.join(logfldr, f"{self.model_name}_{str(self.ident)}_results.png")
+        plt.savefig(save_filename)
+        plt.close()
 
 def createOptions():
     #TODO
     parser = argparse.ArgumentParser(
         description="Pytorch: Audio To Body Dynamics Model"
     )
-    parser.add_argument('--z_size', default=32)
-    parser.add_argument('--dataset_size', type=str)
     parser.add_argument('--p2p', type=bool, default=False)
     parser.add_argument('--model_name', type=str, default="AudioToJoints")
     parser.add_argument('--autoencode', type=bool, default=False)
-
-    parser.add_argument("--audio_file", type=str, default='/Users/will.i.liam/Desktop/final_project/VEE5qqDPVGY/audio/dior_pop_smoke.mp3',
+    parser.add_argument("--audio_file", type=str, default=None,
                         help="Only in for Test. Location audio file for generating test video")
     parser.add_argument("--freestyle", type=bool, default=False,
                         help="Expects an audio file. Does not take in any pose files: model will generate according to given audio.")
-    parser.add_argument("--logfldr", type=str, default=None,
+    parser.add_argument("--logfldr", type=str, default='logs',
                         help="Path to folder to save training information")
     parser.add_argument("--batch_size", type=int, default=10,
                         help="Training batch size. Set to 1 in test")
@@ -332,22 +371,14 @@ def createOptions():
                         help="The fraction of the training data to use as validation")
     parser.add_argument("--hidden_size", type=int, default=1024,
                         help="Dimension of the hidden representation")
-    parser.add_argument("--test_model", type=str, default=None,
+    parser.add_argument("--model_dir", type=str, default='saved_models',
                         help="Location for saved model to load")
-    parser.add_argument("--device", type=str, default="gpu",
+    parser.add_argument("--device", type=str, default="cuda",
                         help="Device to train on. Use 'cpu' if to train on cpu.")
     parser.add_argument("--max_epochs", type=int, default=10,
                         help="max number of epochs to run for")
     parser.add_argument("--lr", type=float, default=1e-3,
                         help="Learning Rate for optimizer")
-    parser.add_argument("--time_steps", type=int, default=60,
-                        help="Prediction Timesteps")
-    parser.add_argument("--patience", type=int, default=100,
-                        help="Number of epochs with no validation improvement"
-                        " before stopping training")
-    parser.add_argument("--time_delay", type=int, default=6,
-                        help="Time delay for RNN. Negative values mean no delay."
-                        "Give in terms of frames. 30 frames = 1 second.")
     parser.add_argument("--dp", type=float, default=0.1,
                         help="Dropout Ratio For Training")
     parser.add_argument("--log_frequency", type=int, default=10,
@@ -367,6 +398,10 @@ def main():
     mfcc_file = ""
     pose_file = None
     seq_len = args.seq_len
+    params = {'batch_size':args.batch_size,
+              'shuffle':False,
+              'num_workers': 1
+              }
 
     if args.p2p:
         pose_file = root_dir + 'processed_compiled_data_line_0.npy'
@@ -382,39 +417,40 @@ def main():
                 # get audio
                 mfcc_file = output_file_path
                 pose_file = None
+
+                # use pose_file=None feature of dataset
+                dataset = AudioToPosesDataset(mfcc_file, pose_file, seq_len)
+                generator = (data.DataLoader(dataset, **params))
             else:
                 print("Missing audio file")
         else:
-            mfcc_file = root_dir + 'mfcc_VEE5qqDPVGY_line_0.npy'
-            pose_file = root_dir + 'processed_VEE5qqDPVGY_line_0.npy'
+            # is training
 
-            # print(mfcc_file)
-            # print(pose_file)
-
-        if args.autoencode:
-            dataset = AudioToPosesDirDataset(directory=root_dir, seq_len=seq_len, pose2pose=True)
-        elif args.dataset_size == 'big':
-            dataset = AudioToPosesDirDataset(root_dir, seq_len)
-        else:
-            dataset = AudioToPosesDataset(mfcc_file, pose_file, seq_len)
-
-    params = {'batch_size':args.batch_size,
-              'shuffle':False,
-              'num_workers': 1
-              }
-    generator = data.DataLoader(dataset, **params)
+            # check val_split first
+            if args.val_split >= 1:
+                print("Val split cannot be whole or greater than dataset.")
+                exit(1)
+            train_split = 1 - args.val_split
+            # dataset will take (1 - val_split) percent of each individual .npy
+            train_dataset = AudioToPosesDirDataset(root_dir, seq_len, pose2pose=args.autoencode, end=train_split)
+            val_dataset = AudioToPosesDirDataset(root_dir, seq_len, pose2pose=args.autoencode, start=train_split)
+            generator = (data.DataLoader(train_dataset), data.DataLoader(val_dataset))
 
     # Create model
     dynamics_learner = AudioToBodyDynamics(args,
                                            generator,
                                            freestyle=args.freestyle)
 
+    if args.logfldr[-1] != '/':
+        args.logfldr += '/'
+    if args.model_dir[-1] != '/':
+        args.model_dir += '/'
     # Train model
     if not args.freestyle:
         print("training")
-        min_train = dynamics_learner.trainModel(
-            args.max_epochs, args.logfldr, args.patience)
-        best_losses = [min_train]
+        min_train, min_val = dynamics_learner.trainModel(
+            args.max_epochs, args.logfldr, args.model_dir)
+        best_losses = [min_train, min_val]
     else:
         outputs = dynamics_learner.runEpoch() # train_losses, val_loss, preds, targets
         iter_train, iter_val, preds, target = outputs
