@@ -6,6 +6,7 @@ from torch.utils import data
 from classes import AudioToPosesDataset, PosesToPosesDataset, AudioToPosesDirDataset
 from data_utils.joints import draw_pose_figure, add_pose_to_canvas
 from sklearn.cluster import KMeans
+from sklearn_extra.cluster import KMedoids
 import matplotlib.pyplot as plt
 import os
 import argparse
@@ -257,7 +258,10 @@ class AudioToBodyDynamics(object):
     # plot random subset of poses in VAE latent space
     def vae_plot(self):
         z_list = torch.Tensor(1,2)
+        poses = []
         for input, output in self.generator:
+            for inp in input:
+                poses.append(inp)
             mu, logvar = self.model.encode(input)
             z = self.model.reparameterize(mu, logvar)
             z2 = z[:,-1,:]
@@ -265,19 +269,30 @@ class AudioToBodyDynamics(object):
 
         indices = np.random.randint(low=1, high=z_list.shape[0], size=1000)
         coords = np.array([z_list[ind,:].detach().numpy() for ind in indices])
-        plt.scatter(coords[:,0], coords[:,1])
+
+        # # k-means clustering for coloring
+        # kmeans = KMeans(n_clusters=5).fit(coords)
+        # y_kmeans = kmeans.predict(coords)
+        # plt.scatter(coords[:,0], coords[:,1], c=y_kmeans, cmap='viridis')
+        # plt.show()
+        #
+        # # draw each mean pose
+        # centers = kmeans.cluster_centers_
+        # recons = [self.model.decode(torch.from_numpy(center)).detach().numpy().reshape(19,2) for center in centers]
+
+        # k-medoids clustering for coloring
+        kmedoids = KMedoids(n_clusters=5).fit(coords)
+        y_kmedoids = kmedoids.predict(coords)
+        plt.scatter(coords[:,0], coords[:,1], c=y_kmedoids, cmap='viridis')
         plt.show()
 
-        # k-means clustering for coloring
-        kmeans = KMeans(n_clusters=5).fit(coords)
-        y_kmeans = kmeans.predict(coords)
-        plt.scatter(coords[:,0], coords[:,1], c=y_kmeans, cmap='viridis')
-        plt.show()
+        recons = []
+        for center in kmedoids.cluster_centers_:
+            c = np.array(center)
+            for i in range(len(coords)):
+                if np.array_equal(c, coords[i]):
+                    recons.append(poses[indices[i]-1].detach().numpy().reshape(19,2))
 
-        # draw each mean pose
-        centers = kmeans.cluster_centers_
-        recons = [self.model.decode(torch.from_numpy(center)).detach().numpy().reshape(19,2) for center in centers]
-        #print(recons)
         self.draw_poses(np.array(recons))
 
     # Takes in np array of poses that are each 19x2 arrays
