@@ -256,54 +256,17 @@ class AudioToBodyDynamics(object):
             iter_train, iter_val, predictions, targets = self.runEpoch()
 
             iter_mean = np.mean(iter_train)
+            iter_val_mean = np.mean(iter_val)
             # iter_val_mean = np.mean(iter_val[0]), np.mean(iter_val[1])
 
             epoch_losses.append(iter_mean)
             batch_losses.extend(iter_train)
-            # val_losses.append(iter_val_mean)
+            val_losses.append(iter_val_mean)
 
             log.info("Epoch {} / {}".format(i, max_epochs))
-            log.info("Training Loss (1980 x 1080): {}".format(iter_mean))
-            best_train_loss = iter_mean
-            '''
-            improved = iter_val_mean[1] < best_loss
-            if improved:
-                best_loss = iter_val_mean[1]
-                best_val_loss = iter_val_mean
-                best_train_loss = iter_mean
-                iters_without_improvement = 0
-            else:
-                iters_without_improvement += 1
-                if iters_without_improvement >= patience:
-                    log.info("Stopping Early because no improvment in {}".format(
-                        iters_without_improvement))
-                    break
-            # if improved or (i % self.log_frequency) == 0:
-            #     # Save the model information
-            #     path = os.path.join(logfldr, "Epoch_{}".format(i))
-            #     os.makedirs(path)
-            #     path = os.path.join(path, "model_db.pth")
-            #     state_info = {
-            #         'epoch': i,
-            #         'epoch_losses': epoch_losses,
-            #         'batch_losses': batch_losses,
-            #         'validation_losses': val_losses,
-            #         'model_state_dict': self.model.state_dict(),
-            #         'optim_state_dict': self.optim.state_dict(),
-            #         'data_state_dict': self.data_iterator.stateDict()
-            #     }
-            #     self.saveModel(state_info, path)
-            #     if improved:
-            #         path = os.path.join(logfldr, "best_model_db.pth")
-            #         self.saveModel(state_info, path)
-            #
-            #     # Visualize the PCA Coefficients
-            #     num_vis = min(3, targets[0].shape[-1])
-            #     for j in range(num_vis):
-            #         save_path = os.path.join(
-            #             logfldr, "Epoch_{}/pca_{}.png".format(i, j))
-            #         self.visualizePCA(predictions[0], targets[0], j, save_path)
-            '''
+            log.info(f"Training Loss : {iter_mean}")
+            log.info(f"Validation Loss : {iter_val_mean}")
+            best_train_loss = iter_mean if iter_mean < best_train_loss else best_train_loss
 
         # Visualize VAE latent space
         if self.model_name == 'VAE':
@@ -317,54 +280,25 @@ class AudioToBodyDynamics(object):
             plt.plot(x,y)
             plt.show()
 
-        # self.plotResults(logfldr, epoch_losses, batch_losses, val_losses)
-        # return best_train_loss, best_val_loss
+        self.plotResults(logfldr, epoch_losses, batch_losses, val_losses)
         path = "saved_models/" + self.model_name + str(self.ident) + ".pth"
         self.saveModel(state_info, path)
         return best_train_loss
 
-    # def formatVizArrays(self, predictions, targets):
-    #     final_pred, final_targ = [], []
-    #     for ind, pred in enumerate(predictions):
-    #         pred = self.data_iterator.toPixelSpace(pred)
-    #         targ = self.data_iterator.toPixelSpace(targets[ind])
-    #         pred = self.data_iterator.reconstructKeypsOrder(pred)
-    #         targ = self.data_iterator.reconstructKeypsOrder(targ)
-    #         final_pred.append(pred)
-    #         final_targ.append(targ)
-    #
-    #     final_pred, final_targ = np.vstack(final_pred), np.vstack(final_targ)
-    #     final_pred = final_pred[0::(2**self.upsample_times)]
-    #     final_targ = final_targ[0::(2**self.upsample_times)]
-    #
-    #     return final_pred, final_targ
-
-    # def visualizePCA(self, preds, targets, pca_dim, save_path):
-    #     preds = self.data_iterator.getPCASeq(preds, pca_dim=pca_dim)
-    #     targs = self.data_iterator.getPCASeq(targets, pca_dim=pca_dim)
-    #     assert(len(preds) == len(targs))
-    #     plt.plot(preds, color='red', label='Predictions')
-    #     plt.plot(targs, color='green', label='Ground Truth')
-    #     plt.legend()
-    #     plt.savefig(save_path)
-    #     plt.close()
-
     def plotResults(self, logfldr, epoch_losses, batch_losses, val_losses):
         losses = [epoch_losses, batch_losses, val_losses]
         names = [
-            ["Epoch pixel losses", "Epoch coeff losses"],
-            ["Batch pixel losses", "Batch coeff losses"],
-            ["Val pixel losses", "Val coeff losses"]]
-        _, ax = plt.subplots(nrows=len(losses), ncols=2)
+            ["Epoch loss"],
+            ["Batch loss"],
+            ["Val loss"]]
+        _, ax = plt.subplots(nrows=len(losses), ncols=1)
         for index, pair in enumerate(zip(losses, names)):
-            for i in range(2):
-                data = [pair[0][j][i] for j in range(len(pair[0]))]
+            data = [pair[0][j] for j in range(len(pair[0]))]
                 ax[index][i].plot(data, label=pair[1][i])
                 ax[index][i].legend()
         save_filename = os.path.join(logfldr, "results.png")
         plt.savefig(save_filename)
         plt.close()
-
 
 def createOptions():
     #TODO
