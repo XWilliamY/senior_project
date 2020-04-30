@@ -330,7 +330,6 @@ class AudioToBodyDynamics(object):
             file_name = "images/" + f"{count:05}.jpg"
             cv2.imwrite(file_name, canvas)
             count += 1
-=======
 
     def plotResults(self, logfldr, epoch_losses, batch_losses, val_losses):
         losses = [epoch_losses, batch_losses, val_losses]
