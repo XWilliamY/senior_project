@@ -89,17 +89,14 @@ class AudioToBodyDynamics(object):
 
         # Load checkpoint model
         if self.is_freestyle_mode:
-            path = "saved_models/" + args.model_name + str(args.ident) + '.pth'
+            path = f"{model_dir}{args.model_name}_{str(args.ident)}.pth"
             print(path)
             self.loadModelCheckpoint(path)
 
     # loss function
     def buildLoss(self, predictions, targets):
-        print(predictions.shape)
-        print(targets.shape)
         square_diff = (predictions - targets)**2
         out = torch.sum(square_diff, -1, keepdim=True)
-        print(torch.mean(out))
         return torch.mean(out)
 
     def mdn_loss(self, y, pi, mu, sigma):
@@ -215,7 +212,7 @@ class AudioToBodyDynamics(object):
 
         return train_losses, val_losses, predictions, targets
 
-    def trainModel(self, max_epochs, logfldr, patience):
+    def trainModel(self, max_epochs, logfldr, model_dir):
         # TODO
         log.debug("Training model")
         epoch_losses = []
@@ -224,7 +221,10 @@ class AudioToBodyDynamics(object):
         i, best_loss, iters_without_improvement = 0, float('inf'), 0
         best_train_loss, best_val_loss = float('inf'), float('inf')
 
-        filename = 'logs/epoch_of_model_' + str(self.ident) +'.txt'
+        if logfldr:
+            if logfldr[-1] != '/':
+                logfldr += '/'
+        filename = f'{logfldr}epoch_of_model_{str(self.ident)}.txt'
         state_info = {
             'epoch': i,
             'epoch_losses': epoch_losses,
@@ -243,7 +243,10 @@ class AudioToBodyDynamics(object):
                     with open(filename, 'a+') as f:
                         f.write(f"Epoch: {i} started\n")
                 # save the model
-                path = "saved_models/" + self.model_name + str(self.ident) + ".pth"
+                if model_dir:
+                    if model_dir[-1] != '/':
+                        model_dir += '/'
+                path = f"{model_dir}{self.model_name}_{str(self.ident)}.pth"
                 self.saveModel(state_info, path)
 
             # train_info, val_info, predictions, targets
@@ -275,23 +278,26 @@ class AudioToBodyDynamics(object):
             plt.plot(x,y)
             plt.show()
 
-        # self.plotResults(logfldr, epoch_losses, batch_losses, val_losses)
-        path = "saved_models/" + self.model_name + str(self.ident) + ".pth"
+        self.plotResults(logfldr, epoch_losses, batch_losses, val_losses)
+        path = f"{model_dir}{self.model_name}_{str(self.ident)}.pth"
         self.saveModel(state_info, path)
         return best_train_loss, best_val_loss
 
     def plotResults(self, logfldr, epoch_losses, batch_losses, val_losses):
         losses = [epoch_losses, batch_losses, val_losses]
-        names = [
+        names = [            
             ["Epoch loss"],
             ["Batch loss"],
             ["Val loss"]]
         _, ax = plt.subplots(nrows=len(losses), ncols=1)
         for index, pair in enumerate(zip(losses, names)):
             data = [pair[0][j] for j in range(len(pair[0]))]
-            ax[index][i].plot(data, label=pair[1][i])
-            ax[index][i].legend()
-        save_filename = os.path.join(logfldr, "results.png")
+            ax[index].plot(data, label=pair[1])
+            ax[index].legend()
+        if logfldr:
+            if logfldr[-1] != '/':
+                logfldr += '/'
+        save_filename = os.path.join(logfldr, f"{self.model_name}_{str(self.ident)}_results.png")
         plt.savefig(save_filename)
         plt.close()
 
@@ -307,7 +313,7 @@ def createOptions():
                         help="Only in for Test. Location audio file for generating test video")
     parser.add_argument("--freestyle", type=bool, default=False,
                         help="Expects an audio file. Does not take in any pose files: model will generate according to given audio.")
-    parser.add_argument("--logfldr", type=str, default=None,
+    parser.add_argument("--logfldr", type=str, default='logs',
                         help="Path to folder to save training information")
     parser.add_argument("--batch_size", type=int, default=10,
                         help="Training batch size. Set to 1 in test")
@@ -316,29 +322,16 @@ def createOptions():
                         help="The fraction of the training data to use as validation")
     parser.add_argument("--hidden_size", type=int, default=1024,
                         help="Dimension of the hidden representation")
-    parser.add_argument("--model_dir", type=str, default=None,
+    parser.add_argument("--model_dir", type=str, default='saved_models',
                         help="Location for saved model to load")
-    # parser.add_argument("--visualize", type=bool, default=False,
-    #                     help="Visualize the output of the model. Use only in Test")
     parser.add_argument("--device", type=str, default="cuda",
                         help="Device to train on. Use 'cpu' if to train on cpu.")
     parser.add_argument("--max_epochs", type=int, default=10,
                         help="max number of epochs to run for")
     parser.add_argument("--lr", type=float, default=1e-3,
                         help="Learning Rate for optimizer")
-    parser.add_argument("--time_steps", type=int, default=60,
-                        help="Prediction Timesteps")
-    parser.add_argument("--patience", type=int, default=100,
-                        help="Number of epochs with no validation improvement"
-                        " before stopping training")
-    parser.add_argument("--time_delay", type=int, default=6,
-                        help="Time delay for RNN. Negative values mean no delay."
-                        "Give in terms of frames. 30 frames = 1 second.")
     parser.add_argument("--dp", type=float, default=0.1,
                         help="Dropout Ratio For Training")
-    parser.add_argument("--numpca", type=int, default=15,
-                        help="number of pca dimensions. Use -1 if no pca - "
-                             "Train on XY coordinates")
     parser.add_argument("--log_frequency", type=int, default=10,
                         help="The frequency with which to checkpoint the model")
     parser.add_argument("--trainable_init", action='store_false',
@@ -399,11 +392,15 @@ def main():
                                            generator,
                                            freestyle=args.freestyle)
 
+    if args.logfldr[-1] != '/':
+        args.logfldr += '/'
+    if args.model_dir[-1] != '/':
+        args.model_dir += '/'
     # Train model
     if not args.freestyle:
         print("training")
         min_train, min_val = dynamics_learner.trainModel(
-            args.max_epochs, args.logfldr, args.patience)
+            args.max_epochs, args.logfldr, args.model_dir)
         best_losses = [min_train, min_val]
     else:
         outputs = dynamics_learner.runEpoch() # train_losses, val_loss, preds, targets
