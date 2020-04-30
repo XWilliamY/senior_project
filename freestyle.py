@@ -4,12 +4,15 @@ from torch import optim
 from torch.autograd import Variable
 from torch.utils import data
 from classes import AudioToPosesDataset, PosesToPosesDataset, AudioToPosesDirDataset
+from data_utils.joints import draw_pose_figure, add_pose_to_canvas
+from sklearn.cluster import KMeans
 import matplotlib.pyplot as plt
 import os
 import argparse
 import logging
 import numpy as np
 import json
+import cv2
 
 '''
 This script takes an input of audio MFCC features and uses
@@ -92,7 +95,7 @@ class AudioToBodyDynamics(object):
             print(path)
             self.loadModelCheckpoint(path)
 
-    # loss function
+    # general loss function
     def buildLoss(self, predictions, targets):
         print(predictions.shape)
         print(targets.shape)
@@ -108,7 +111,8 @@ class AudioToBodyDynamics(object):
         loss = -torch.log(loss)
         return torch.mean(loss)
 
-    # https://github.com/pytorch/examples/blob/master/vae/main.py, Appendix B of https://github.com/pytorch/examples/blob/master/vae/main.py
+    # Loss function from https://github.com/pytorch/examples/blob/master/vae/main.py,
+    # Appendix B of https://github.com/pytorch/examples/blob/master/vae/main.py
     def vae_loss(self, targets, recon_targets, mu, logvar):
         BCE = nn.functional.binary_cross_entropy(recon_targets, targets, reduction='sum')
         KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
@@ -136,7 +140,6 @@ class AudioToBodyDynamics(object):
             # import from gpu device to cpu, convert to numpy
             return x.cpu().data.numpy()
 
-
         inputs = Variable(torch.DoubleTensor(inputs.double()).to(self.device))
 
         # reshape targets into (batch * seq_len, input features)
@@ -149,9 +152,6 @@ class AudioToBodyDynamics(object):
         else:
             predictions = self.model.forward(inputs)
 
-        # Get loss in MSE of pose coordinates
-        # loss = self.buildLoss(predictions, targets)
-
         criterion = nn.L1Loss()
         if self.model_name == 'AudioToJointsSeq2Seq':
             loss = criterion(predictions.to(self.device), targets.to(self.device).float())
@@ -162,7 +162,6 @@ class AudioToBodyDynamics(object):
             loss = self.vae_loss(targets, predictions, mu, logvar)
         else:
             loss = criterion(predictions, targets)
-        # # Get loss in pixel space
         return (to_numpy(predictions), to_numpy(targets)), loss
 
     def runEpoch(self):
@@ -175,8 +174,6 @@ class AudioToBodyDynamics(object):
             # for each data point
             for mfccs, poses in self.generator:
                 self.model.train() # pass train flag to model
-                # mfccs = mfccs.float()
-                # poses = poses.float()
 
                 vis_data, train_loss = self.runNetwork(mfccs, poses)
                 self.optim.zero_grad()
@@ -248,99 +245,16 @@ class AudioToBodyDynamics(object):
             log.info("Epoch {} / {}".format(i, max_epochs))
             log.info("Training Loss (1980 x 1080): {}".format(iter_mean))
             best_train_loss = iter_mean
-            '''
-            improved = iter_val_mean[1] < best_loss
-            if improved:
-                best_loss = iter_val_mean[1]
-                best_val_loss = iter_val_mean
-                best_train_loss = iter_mean
-                iters_without_improvement = 0
-            else:
-                iters_without_improvement += 1
-                if iters_without_improvement >= patience:
-                    log.info("Stopping Early because no improvment in {}".format(
-                        iters_without_improvement))
-                    break
-            # if improved or (i % self.log_frequency) == 0:
-            #     # Save the model information
-            #     path = os.path.join(logfldr, "Epoch_{}".format(i))
-            #     os.makedirs(path)
-            #     path = os.path.join(path, "model_db.pth")
-            #     state_info = {
-            #         'epoch': i,
-            #         'epoch_losses': epoch_losses,
-            #         'batch_losses': batch_losses,
-            #         'validation_losses': val_losses,
-            #         'model_state_dict': self.model.state_dict(),
-            #         'optim_state_dict': self.optim.state_dict(),
-            #         'data_state_dict': self.data_iterator.stateDict()
-            #     }
-            #     self.saveModel(state_info, path)
-            #     if improved:
-            #         path = os.path.join(logfldr, "best_model_db.pth")
-            #         self.saveModel(state_info, path)
-            #
-            #     # Visualize the PCA Coefficients
-            #     num_vis = min(3, targets[0].shape[-1])
-            #     for j in range(num_vis):
-            #         save_path = os.path.join(
-            #             logfldr, "Epoch_{}/pca_{}.png".format(i, j))
-            #         self.visualizePCA(predictions[0], targets[0], j, save_path)
-            '''
 
         # Visualize VAE latent space
         if self.model_name == 'VAE':
             self.vae_plot()
 
-
-        # self.plotResults(logfldr, epoch_losses, batch_losses, val_losses)
-        # return best_train_loss, best_val_loss
         path = "saved_models/" + self.model_name + str(self.ident) + ".pth"
         self.saveModel(state_info, path)
         return best_train_loss
 
-    # def formatVizArrays(self, predictions, targets):
-    #     final_pred, final_targ = [], []
-    #     for ind, pred in enumerate(predictions):
-    #         pred = self.data_iterator.toPixelSpace(pred)
-    #         targ = self.data_iterator.toPixelSpace(targets[ind])
-    #         pred = self.data_iterator.reconstructKeypsOrder(pred)
-    #         targ = self.data_iterator.reconstructKeypsOrder(targ)
-    #         final_pred.append(pred)
-    #         final_targ.append(targ)
-    #
-    #     final_pred, final_targ = np.vstack(final_pred), np.vstack(final_targ)
-    #     final_pred = final_pred[0::(2**self.upsample_times)]
-    #     final_targ = final_targ[0::(2**self.upsample_times)]
-    #
-    #     return final_pred, final_targ
-
-    # def visualizePCA(self, preds, targets, pca_dim, save_path):
-    #     preds = self.data_iterator.getPCASeq(preds, pca_dim=pca_dim)
-    #     targs = self.data_iterator.getPCASeq(targets, pca_dim=pca_dim)
-    #     assert(len(preds) == len(targs))
-    #     plt.plot(preds, color='red', label='Predictions')
-    #     plt.plot(targs, color='green', label='Ground Truth')
-    #     plt.legend()
-    #     plt.savefig(save_path)
-    #     plt.close()
-
-    def plotResults(self, logfldr, epoch_losses, batch_losses, val_losses):
-        losses = [epoch_losses, batch_losses, val_losses]
-        names = [
-            ["Epoch pixel losses", "Epoch coeff losses"],
-            ["Batch pixel losses", "Batch coeff losses"],
-            ["Val pixel losses", "Val coeff losses"]]
-        _, ax = plt.subplots(nrows=len(losses), ncols=2)
-        for index, pair in enumerate(zip(losses, names)):
-            for i in range(2):
-                data = [pair[0][j][i] for j in range(len(pair[0]))]
-                ax[index][i].plot(data, label=pair[1][i])
-                ax[index][i].legend()
-        save_filename = os.path.join(logfldr, "results.png")
-        plt.savefig(save_filename)
-        plt.close()
-
+    # plot random subset of poses in VAE latent space
     def vae_plot(self):
         z_list = torch.Tensor(1,2)
         for input, output in self.generator:
@@ -349,12 +263,34 @@ class AudioToBodyDynamics(object):
             z2 = z[:,-1,:]
             z_list = torch.cat((z_list.double(), z2.double()), 0)
 
-        indices = np.random.randint(low=1, high=z_list.shape[0], size=100)
-        coords = [z_list[ind,:].detach().numpy() for ind in indices]
-        xs = [c[0] for c in coords]
-        ys = [c[1] for c in coords]
-        plt.scatter(xs, ys)
+        indices = np.random.randint(low=1, high=z_list.shape[0], size=1000)
+        coords = np.array([z_list[ind,:].detach().numpy() for ind in indices])
+        plt.scatter(coords[:,0], coords[:,1])
         plt.show()
+
+        # k-means clustering for coloring
+        kmeans = KMeans(n_clusters=5).fit(coords)
+        y_kmeans = kmeans.predict(coords)
+        plt.scatter(coords[:,0], coords[:,1], c=y_kmeans, cmap='viridis')
+        plt.show()
+
+        # draw each mean pose
+        centers = kmeans.cluster_centers_
+        recons = [self.model.decode(torch.from_numpy(center)).detach().numpy().reshape(19,2) for center in centers]
+        #print(recons)
+        self.draw_poses(np.array(recons))
+
+    # Takes in np array of poses that are each 19x2 arrays
+    def draw_poses(self, poses):
+        count = 0
+        shift_by = np.array([750, 800]) - poses[0][8]
+        poses += shift_by
+        for pose in poses:
+            person_id = str(0) + ", " + str([0])
+            canvas = draw_pose_figure(person_id, pose)
+            file_name = "images/" + f"{count:05}.jpg"
+            cv2.imwrite(file_name, canvas)
+            count += 1
 
 
 def createOptions():
@@ -368,7 +304,6 @@ def createOptions():
     parser.add_argument('--model_name', type=str, default="AudioToJoints")
     parser.add_argument('--autoencode', type=bool, default=False)
 
-    # dior_pop_smoke.mp3',
     parser.add_argument("--audio_file", type=str, default='/Users/will.i.liam/Desktop/final_project/VEE5qqDPVGY/audio/dior_pop_smoke.mp3',
                         help="Only in for Test. Location audio file for generating test video")
     parser.add_argument("--freestyle", type=bool, default=False,
@@ -384,8 +319,6 @@ def createOptions():
                         help="Dimension of the hidden representation")
     parser.add_argument("--test_model", type=str, default=None,
                         help="Location for saved model to load")
-    # parser.add_argument("--visualize", type=bool, default=False,
-    #                     help="Visualize the output of the model. Use only in Test")
     parser.add_argument("--device", type=str, default="gpu",
                         help="Device to train on. Use 'cpu' if to train on cpu.")
     parser.add_argument("--max_epochs", type=int, default=10,
@@ -402,9 +335,6 @@ def createOptions():
                         "Give in terms of frames. 30 frames = 1 second.")
     parser.add_argument("--dp", type=float, default=0.1,
                         help="Dropout Ratio For Training")
-    parser.add_argument("--numpca", type=int, default=15,
-                        help="number of pca dimensions. Use -1 if no pca - "
-                             "Train on XY coordinates")
     parser.add_argument("--log_frequency", type=int, default=10,
                         help="The frequency with which to checkpoint the model")
     parser.add_argument("--trainable_init", action='store_false',
@@ -443,8 +373,8 @@ def main():
             mfcc_file = root_dir + 'mfcc_VEE5qqDPVGY_line_0.npy'
             pose_file = root_dir + 'processed_VEE5qqDPVGY_line_0.npy'
 
-            print(mfcc_file)
-            print(pose_file)
+            # print(mfcc_file)
+            # print(pose_file)
 
         if args.autoencode:
             dataset = AudioToPosesDirDataset(directory=root_dir, seq_len=seq_len, pose2pose=True)
